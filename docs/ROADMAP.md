@@ -15,7 +15,7 @@ Rules:
 
 Branch: `feature/foundation`
 
-- [ ] TF-001 — Initialize the Go module and minimal repository structure.
+- [x] TF-001 — Initialize the Go module and minimal repository structure.
   Commit: `chore: initialize Go module and application layout`
 
 - [ ] TF-002 — Add the HTTP server and public health endpoint.
