@@ -5,19 +5,25 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"time"
 
+	"github.com/kanatovs/taskflow-api/internal/config"
 	"github.com/kanatovs/taskflow-api/internal/handler"
 )
 
 func main() {
+	cfg, err := config.Load()
+	if err != nil {
+		slog.Error("Invalid configuration", "error", err)
+		os.Exit(1)
+	}
+
 	server := &http.Server{
-		Addr:              ":8080",
+		Addr:              cfg.HTTPAddr,
 		Handler:           handler.NewRouter(),
-		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       10 * time.Second,
-		WriteTimeout:      10 * time.Second,
-		IdleTimeout:       60 * time.Second,
+		ReadHeaderTimeout: cfg.HTTPReadHeaderTimeout,
+		ReadTimeout:       cfg.HTTPReadTimeout,
+		WriteTimeout:      cfg.HTTPWriteTimeout,
+		IdleTimeout:       cfg.HTTPIdleTimeout,
 	}
 
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
