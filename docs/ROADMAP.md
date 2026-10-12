@@ -15,23 +15,23 @@ Rules:
 
 Branch: `feature/foundation`
 
-- [ ] TF-001 — Initialize the Go module and minimal repository structure.
+- [x] TF-001 — Initialize the Go module and minimal repository structure.
   Commit: `chore: initialize Go module and application layout`
 
-- [ ] TF-002 — Add the HTTP server and public health endpoint.
+- [x] TF-002 — Add the HTTP server and public health endpoint.
   Endpoint: `GET /health`
   Commit: `feat: add HTTP server and health endpoint`
 
-- [ ] TF-003 — Add environment configuration loading and startup validation.
+- [x] TF-003 — Add environment configuration loading and startup validation.
   Commit: `feat(config): load and validate environment configuration`
 
-- [ ] TF-004 — Add JSON response helpers and consistent API error handling.
+- [x] TF-004 — Add JSON response helpers and consistent API error handling.
   Commit: `feat(api): add JSON response and error handling`
 
-- [ ] TF-005 — Add structured logging, panic recovery, and graceful shutdown.
+- [x] TF-005 — Add structured logging, panic recovery, and graceful shutdown.
   Commit: `feat: add structured logging and graceful shutdown`
 
-- [ ] TF-006 — Add Dockerfile, Docker Compose, PostgreSQL, and `.env.example`.
+- [x] TF-006 — Add Dockerfile, Docker Compose, PostgreSQL, and `.env.example`.
   Commit: `chore(docker): add local development environment`
 
 Acceptance:
