@@ -27,6 +27,7 @@ Development follows small, reviewable roadmap tasks. The repository-level
 - HTTP server with environment configuration and startup validation, listening
   on `:8080` by default.
 - Structured JSON logging, HTTP panic recovery, and graceful shutdown.
+- Docker Compose environment for the API and PostgreSQL with persistent storage.
 - Public `GET /health` endpoint returning `200 OK` and JSON:
 
   ```json
@@ -70,6 +71,146 @@ than signaling the `go run` wrapper:
 go build -o ./bin/taskflow-api.exe ./cmd/api
 ./bin/taskflow-api.exe
 ```
+
+## Run with Docker Compose
+
+Requires a running Docker Engine with Linux containers and Docker Compose with
+`up --wait` support. On Windows, start Docker Desktop first. Go is not required
+on the host for this workflow.
+
+Create a local `.env` from the example once. In Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+On Linux or macOS, use `cp .env.example .env`. Keep an existing `.env` when
+repeating setup. The supplied password is a public example for local development;
+do not put real credentials in `.env.example` or commit `.env`.
+
+From the repository root:
+
+```powershell
+docker compose config --quiet
+docker compose build
+docker compose up -d --wait
+docker compose ps
+curl.exe -i http://localhost:8080/health
+docker compose exec -T postgres psql -U taskflow -d taskflow -v ON_ERROR_STOP=1 -c "SELECT 1;"
+```
+
+On Linux or macOS, use `curl` instead of `curl.exe`. Both services should become
+healthy, the HTTP response should contain `{"data":{"status":"ok"}}`, and the
+SQL query should return `1`. The SQL commands use the example database/user;
+adjust `-U` and `-d` if you change those settings.
+
+Compose reads `.env` for variable interpolation and explicitly passes HTTP
+settings to `api` and database settings to `postgres`. Shell environment values
+take precedence over `.env`. The Go application still reads only its process
+environment; `go run ./cmd/api` does not load `.env`.
+
+| Compose setting | Example/default | Meaning |
+| --- | --- | --- |
+| `API_PORT` | `8080` | API port on the host |
+| `POSTGRES_PORT` | `5432` | PostgreSQL port on the host |
+| `API_STOP_GRACE_PERIOD` | `30s` | Container stop deadline before Docker sends SIGKILL |
+| `POSTGRES_DB` | `taskflow` | Database initialized on the first PostgreSQL start |
+| `POSTGRES_USER` | `taskflow` | Local development database user initialized on the first start |
+| `POSTGRES_PASSWORD` | `local_example_only` | Public example password; required and non-empty |
+
+Both published ports bind to `127.0.0.1`. Change the host port settings if `8080`
+or `5432` is occupied, and use the selected API port in HTTP checks. Inside the
+containers, the ports stay `8080` and `5432`. Compose fixes `HTTP_ADDR=:8080` so
+port forwarding and the API healthcheck use the same address. HTTP timeouts use
+the settings described below; explicitly empty values are passed through and
+rejected by application validation.
+
+The Dockerfile builds a static binary with Go 1.26.9, compatible with the module's
+Go 1.25.5 minimum, then copies only that binary into an Alpine runtime image.
+The API runs as UID/GID `10001`, without root privileges. The direct `ENTRYPOINT`
+makes the binary PID 1 so it receives Docker's SIGTERM. `.dockerignore` excludes
+local environment files, Git data, and build output from the build context.
+
+PostgreSQL uses the official `postgres:17-alpine` image and a named
+`postgres_data` volume at `/var/lib/postgresql/data`. The `POSTGRES_USER` created
+by this image is a database superuser; these credentials are intended only for
+this local development environment. Database connection and readiness checks
+in the API are future work in TF-007. Currently the API and PostgreSQL start
+independently. The PostgreSQL healthcheck uses `pg_isready`; the API healthcheck
+calls `/health`, which does not verify database availability.
+
+To inspect logs and check graceful shutdown:
+
+```powershell
+docker compose logs --tail 20 api postgres
+docker compose stop api
+docker compose logs --tail 10 api
+docker compose ps -a
+docker compose up -d --wait api
+```
+
+After stopping, the API should log `HTTP server shutting down` and
+`HTTP server stopped`, and its container should have exit code `0`. Keep
+`API_STOP_GRACE_PERIOD` longer than `HTTP_SHUTDOWN_TIMEOUT`, with a margin for
+process exit; the examples use `30s` and `10s` respectively.
+
+Stop and remove the development containers while keeping database data:
+
+```powershell
+docker compose down
+```
+
+The named volume survives `down` and is reused on the next `up`.
+`POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` only initialize an empty
+data directory. Editing `.env` does not change credentials in an existing
+database. Do not delete a volume to change a password if it contains data you
+need. Recreate containers with `docker compose up -d --wait` after changing
+environment settings; `docker compose restart` does not apply those changes.
+
+If a command cannot reach Docker Engine, check that Docker Desktop is running
+with Linux containers. For an unhealthy container, inspect `docker compose ps`
+and `docker compose logs --tail 50 api postgres`. `config --quiet` validates the
+Compose configuration without printing expanded credentials; avoid sharing the
+output of plain `docker compose config` or a full container inspection.
+
+### Docker smoke checks
+
+These checks exercise the container environment without changing application
+code or adding application tables. Use the example configuration in a disposable
+Compose project with separate host ports, while keeping the normal development
+volume untouched. Run this PowerShell block in a fresh terminal from the root;
+the temporary port overrides are restored even if a check fails:
+
+```powershell
+$previousApiPort = $env:API_PORT
+$previousPostgresPort = $env:POSTGRES_PORT
+try {
+    $env:API_PORT = "18080"
+    $env:POSTGRES_PORT = "15432"
+    docker compose --env-file .env.example -p taskflow-tf006-smoke up -d --build --wait
+    curl.exe -i http://localhost:18080/health
+    docker compose --env-file .env.example -p taskflow-tf006-smoke exec -T postgres psql -U taskflow -d taskflow -v ON_ERROR_STOP=1 -c "CREATE TABLE tf006_smoke (value TEXT NOT NULL); INSERT INTO tf006_smoke VALUES ('volume survives container recreation');"
+    docker compose --env-file .env.example -p taskflow-tf006-smoke down
+    docker compose --env-file .env.example -p taskflow-tf006-smoke up -d --wait
+    docker compose --env-file .env.example -p taskflow-tf006-smoke exec -T postgres psql -U taskflow -d taskflow -v ON_ERROR_STOP=1 -c "SELECT value FROM tf006_smoke;"
+    docker compose --env-file .env.example -p taskflow-tf006-smoke run --rm --no-deps -e HTTP_WRITE_TIMEOUT=0s api
+    if ($LASTEXITCODE -ne 1) { throw "Invalid timeout must exit with code 1" }
+    docker compose --env-file .env.example -p taskflow-tf006-smoke stop api
+    docker compose --env-file .env.example -p taskflow-tf006-smoke logs --tail 10 api
+    docker compose --env-file .env.example -p taskflow-tf006-smoke ps -a
+} finally {
+    docker compose --env-file .env.example -p taskflow-tf006-smoke down --volumes
+    $env:API_PORT = $previousApiPort
+    $env:POSTGRES_PORT = $previousPostgresPort
+}
+```
+
+Check that the persisted row is returned after `down`/`up`, the invalid run logs
+`HTTP_WRITE_TIMEOUT` and exits with `1`, and the stopped API exits cleanly with
+`0`. The `finally` block deletes only the disposable project's containers and
+volume, including its test table. Reserve `taskflow-tf006-smoke` for these checks;
+do not store development data in it. Other failed native commands must also be
+investigated; this manual block does not automatically assert every result.
 
 ## JSON responses and errors
 

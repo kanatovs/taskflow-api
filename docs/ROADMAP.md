@@ -31,7 +31,7 @@ Branch: `feature/foundation`
 - [x] TF-005 — Add structured logging, panic recovery, and graceful shutdown.
   Commit: `feat: add structured logging and graceful shutdown`
 
-- [ ] TF-006 — Add Dockerfile, Docker Compose, PostgreSQL, and `.env.example`.
+- [x] TF-006 — Add Dockerfile, Docker Compose, PostgreSQL, and `.env.example`.
   Commit: `chore(docker): add local development environment`
 
 Acceptance:
