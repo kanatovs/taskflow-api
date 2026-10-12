@@ -25,7 +25,7 @@ Branch: `feature/foundation`
 - [x] TF-003 — Add environment configuration loading and startup validation.
   Commit: `feat(config): load and validate environment configuration`
 
-- [ ] TF-004 — Add JSON response helpers and consistent API error handling.
+- [x] TF-004 — Add JSON response helpers and consistent API error handling.
   Commit: `feat(api): add JSON response and error handling`
 
 - [ ] TF-005 — Add structured logging, panic recovery, and graceful shutdown.

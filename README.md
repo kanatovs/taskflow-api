@@ -53,12 +53,49 @@ In Windows PowerShell, use `curl.exe` to avoid the `curl` alias.
 
 The response has status `200 OK` and `Content-Type: application/json`.
 `POST /health` returns `405 Method Not Allowed`; unknown paths return `404 Not Found`.
-Routing errors currently use Chi's default responses. A consistent JSON error
-format will be added in TF-004.
+Both routing errors return JSON. A `405` response includes `Allow: GET` for
+`/health`.
 
 The configured listen address must be available; a startup failure exits with a
 nonzero code.
 Stop the process with `Ctrl+C`; graceful shutdown will be added in TF-005.
+
+## JSON responses and errors
+
+Successful resource responses use a `data` envelope. Errors use a separate
+`error` envelope with a stable machine-readable code, a safe message, and a
+`details` object. When there are no details, it is an empty object, not `null`.
+
+For example, `GET /unknown` returns `404 Not Found`:
+
+```json
+{
+  "error": {
+    "code": "not_found",
+    "message": "Route not found",
+    "details": {}
+  }
+}
+```
+
+| Status | Code | Message |
+| --- | --- | --- |
+| 404 | `not_found` | Route not found |
+| 405 | `method_not_allowed` | Method not allowed |
+| 500 | `internal_error` | Internal server error |
+
+Response helpers serialize JSON before sending the status and body. If
+serialization fails, the API returns the safe `500` JSON response and logs
+the internal error server-side. If writing to the client fails after the
+response starts, the error is logged without attempting a second response.
+These helpers do not recover panics; panic recovery is planned for TF-005.
+
+To check routing errors in Windows PowerShell while the API is running:
+
+```powershell
+curl.exe -i http://localhost:8080/unknown
+curl.exe -i -X POST http://localhost:8080/health
+```
 
 ## Configuration
 
