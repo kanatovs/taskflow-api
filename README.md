@@ -39,7 +39,9 @@ check database or cache availability.
 
 ## Run locally
 
-Requires Go 1.25.5 or later. Run from the repository root:
+Requires Go 1.26.9 or a newer supported, patched release. Keep the local
+toolchain current: Go security fixes also update the standard library compiled
+into the API binary. Run from the repository root:
 
 ```sh
 go run ./cmd/api
@@ -125,8 +127,8 @@ port forwarding and the API healthcheck use the same address. HTTP timeouts use
 the settings described below; explicitly empty values are passed through and
 rejected by application validation.
 
-The Dockerfile builds a static binary with Go 1.26.9, compatible with the module's
-Go 1.25.5 minimum, then copies only that binary into an Alpine runtime image.
+The Dockerfile builds a static binary with Go 1.26.9, matching the module's
+minimum version, then copies only that binary into an Alpine runtime image.
 The API runs as UID/GID `10001`, without root privileges. The direct `ENTRYPOINT`
 makes the binary PID 1 so it receives Docker's SIGTERM. `.dockerignore` excludes
 local environment files, Git data, and build output from the build context.
