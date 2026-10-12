@@ -1,14 +1,16 @@
 package handler
 
 import (
+	"log/slog"
 	"net/http"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 )
 
-func NewRouter() http.Handler {
+func NewRouter(logger *slog.Logger) http.Handler {
 	router := chi.NewRouter()
+	router.Use(requestMiddleware(logger))
 	router.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusNotFound, "not_found", "Route not found", nil)
 	})

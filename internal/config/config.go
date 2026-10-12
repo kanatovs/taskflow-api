@@ -18,6 +18,7 @@ type Config struct {
 	HTTPReadTimeout       time.Duration
 	HTTPWriteTimeout      time.Duration
 	HTTPIdleTimeout       time.Duration
+	HTTPShutdownTimeout   time.Duration
 }
 
 // Load reads and validates the process environment, using defaults for unset variables.
@@ -44,6 +45,10 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	cfg.HTTPIdleTimeout, err = loadDuration("HTTP_IDLE_TIMEOUT", 60*time.Second)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.HTTPShutdownTimeout, err = loadDuration("HTTP_SHUTDOWN_TIMEOUT", 10*time.Second)
 	if err != nil {
 		return Config{}, err
 	}

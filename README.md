@@ -26,6 +26,7 @@ Development follows small, reviewable roadmap tasks. The repository-level
 
 - HTTP server with environment configuration and startup validation, listening
   on `:8080` by default.
+- Structured JSON logging, HTTP panic recovery, and graceful shutdown.
 - Public `GET /health` endpoint returning `200 OK` and JSON:
 
   ```json
@@ -58,7 +59,17 @@ Both routing errors return JSON. A `405` response includes `Allow: GET` for
 
 The configured listen address must be available; a startup failure exits with a
 nonzero code.
-Stop the process with `Ctrl+C`; graceful shutdown will be added in TF-005.
+Stop the process with `Ctrl+C`. The API stops accepting connections, waits for
+active HTTP requests to finish, and exits with code `0` after a clean shutdown.
+`SIGTERM` also triggers shutdown on systems that support it. If the shutdown
+deadline expires, remaining connections are closed and the process exits with
+code `1`. For direct process/signal control, build and run the executable rather
+than signaling the `go run` wrapper:
+
+```powershell
+go build -o ./bin/taskflow-api.exe ./cmd/api
+./bin/taskflow-api.exe
+```
 
 ## JSON responses and errors
 
@@ -88,7 +99,13 @@ Response helpers serialize JSON before sending the status and body. If
 serialization fails, the API returns the safe `500` JSON response and logs
 the internal error server-side. If writing to the client fails after the
 response starts, the error is logged without attempting a second response.
-These helpers do not recover panics; panic recovery is planned for TF-005.
+HTTP middleware recovers handler panics. Before the response starts, it returns
+the same safe `500` JSON error. After headers or body bytes have been sent, it
+aborts the connection instead of appending an error to the partial response.
+An intentional `http.ErrAbortHandler` remains an abort. Recovery only covers
+the goroutine executing the HTTP handler; it does not recover panics in other
+goroutines. Streaming handlers should use `http.ResponseController` to flush
+through the response wrapper.
 
 To check routing errors in Windows PowerShell while the API is running:
 
@@ -96,6 +113,22 @@ To check routing errors in Windows PowerShell while the API is running:
 curl.exe -i http://localhost:8080/unknown
 curl.exe -i -X POST http://localhost:8080/health
 ```
+
+## Logging
+
+The application writes JSON logs to stdout using `log/slog`. Startup,
+configuration/listener failures, shutdown, and internal HTTP server errors use
+the same logger. Each request gets a server-generated `X-Request-ID` response
+header; a client-supplied ID is not reused. Request completion logs include
+`request_id`, `method`, `path`, `status`, `response_bytes`, `duration_ms`, and
+`aborted`. Response serialization/write errors and panic logs carry the same
+request ID so they can be correlated with the request completion event.
+
+Request bodies, response bodies, query strings, and authorization headers are
+not logged. Panic logs contain a stack trace without the panic value, which
+could contain sensitive data. Paths are logged, so do not put credentials in
+URL paths. An aborted request with no committed response has log status `0`;
+after the response starts, the log preserves the status already sent.
 
 ## Configuration
 
@@ -112,6 +145,7 @@ a restart. The application does not read `.env` files.
 | `HTTP_READ_TIMEOUT` | `10s` | Maximum time to read the entire request, including its body |
 | `HTTP_WRITE_TIMEOUT` | `10s` | Maximum time to write the response |
 | `HTTP_IDLE_TIMEOUT` | `60s` | Maximum time to wait for the next request on a keep-alive connection |
+| `HTTP_SHUTDOWN_TIMEOUT` | `10s` | Maximum time to wait for active requests during shutdown |
 
 `HTTP_ADDR` accepts an empty host, an IP address, or a hostname, with a numeric
 port from `1` to `65535`. For example: `:8080`, `127.0.0.1:8081`,

@@ -1,33 +1,52 @@
 package main
 
 import (
-	"errors"
+	"context"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/kanatovs/taskflow-api/internal/config"
 	"github.com/kanatovs/taskflow-api/internal/handler"
+	"github.com/kanatovs/taskflow-api/internal/platform/httpserver"
 )
 
 func main() {
+	os.Exit(run())
+}
+
+func run() int {
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	cfg, err := config.Load()
 	if err != nil {
-		slog.Error("Invalid configuration", "error", err)
-		os.Exit(1)
+		logger.Error("Invalid configuration", "error", err)
+		return 1
 	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           handler.NewRouter(),
+		Handler:           handler.NewRouter(logger),
 		ReadHeaderTimeout: cfg.HTTPReadHeaderTimeout,
 		ReadTimeout:       cfg.HTTPReadTimeout,
 		WriteTimeout:      cfg.HTTPWriteTimeout,
 		IdleTimeout:       cfg.HTTPIdleTimeout,
+		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelError),
 	}
 
-	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		slog.Error("HTTP server failed", "error", err)
-		os.Exit(1)
+	listener, err := net.Listen("tcp", cfg.HTTPAddr)
+	if err != nil {
+		logger.Error("HTTP listener failed", "error", err)
+		return 1
 	}
+	if err := httpserver.Serve(ctx, server, listener, cfg.HTTPShutdownTimeout, logger); err != nil {
+		logger.Error("HTTP server failed", "error", err)
+		return 1
+	}
+	return 0
 }

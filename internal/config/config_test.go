@@ -16,6 +16,7 @@ func TestLoad(t *testing.T) {
 		HTTPReadTimeout:       10 * time.Second,
 		HTTPWriteTimeout:      10 * time.Second,
 		HTTPIdleTimeout:       60 * time.Second,
+		HTTPShutdownTimeout:   10 * time.Second,
 	}
 	partial := defaults
 	partial.HTTPAddr = "localhost:8081"
@@ -38,6 +39,7 @@ func TestLoad(t *testing.T) {
 				"HTTP_READ_TIMEOUT":        "15s",
 				"HTTP_WRITE_TIMEOUT":       "20s",
 				"HTTP_IDLE_TIMEOUT":        "1m30s",
+				"HTTP_SHUTDOWN_TIMEOUT":    "25s",
 			},
 			want: config.Config{
 				HTTPAddr:              "127.0.0.1:9090",
@@ -45,6 +47,7 @@ func TestLoad(t *testing.T) {
 				HTTPReadTimeout:       15 * time.Second,
 				HTTPWriteTimeout:      20 * time.Second,
 				HTTPIdleTimeout:       90 * time.Second,
+				HTTPShutdownTimeout:   25 * time.Second,
 			},
 		},
 		{
@@ -150,6 +153,7 @@ func TestLoadInvalidTimeout(t *testing.T) {
 		"HTTP_READ_TIMEOUT",
 		"HTTP_WRITE_TIMEOUT",
 		"HTTP_IDLE_TIMEOUT",
+		"HTTP_SHUTDOWN_TIMEOUT",
 	} {
 		t.Run(name, func(t *testing.T) {
 			for _, tt := range tests {
@@ -185,6 +189,7 @@ func unsetConfigEnv(t *testing.T) {
 		"HTTP_READ_TIMEOUT",
 		"HTTP_WRITE_TIMEOUT",
 		"HTTP_IDLE_TIMEOUT",
+		"HTTP_SHUTDOWN_TIMEOUT",
 	} {
 		// Setenv registers restoration of the original value before Unsetenv.
 		t.Setenv(name, "")

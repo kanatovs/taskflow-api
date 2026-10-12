@@ -2,7 +2,6 @@ package handler
 
 import (
 	"encoding/json"
-	"log/slog"
 	"net/http"
 )
 
@@ -38,7 +37,7 @@ func writeJSON(w http.ResponseWriter, r *http.Request, status int, response any)
 	// Serialize before committing headers so an encoding failure can return 500.
 	body, err := json.Marshal(response)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "encode JSON response", "error", err)
+		requestLogger(r).ErrorContext(r.Context(), "encode JSON response", "error", err)
 		status = http.StatusInternalServerError
 		// A fixed JSON body avoids another serialization failure while handling one.
 		body = []byte(`{"error":{"code":"internal_error","message":"Internal server error","details":{}}}`)
@@ -49,6 +48,6 @@ func writeJSON(w http.ResponseWriter, r *http.Request, status int, response any)
 	w.WriteHeader(status)
 	if _, err := w.Write(body); err != nil {
 		// The response has started; attempting another response would corrupt it.
-		slog.ErrorContext(r.Context(), "write JSON response", "error", err)
+		requestLogger(r).ErrorContext(r.Context(), "write JSON response", "error", err)
 	}
 }

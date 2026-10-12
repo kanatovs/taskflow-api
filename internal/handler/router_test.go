@@ -3,6 +3,7 @@ package handler_test
 import (
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -72,7 +73,7 @@ func TestRouter(t *testing.T) {
 			request := httptest.NewRequest(tt.method, tt.path, nil)
 			recorder := httptest.NewRecorder()
 
-			handler.NewRouter().ServeHTTP(recorder, request)
+			handler.NewRouter(slog.New(slog.NewJSONHandler(io.Discard, nil))).ServeHTTP(recorder, request)
 
 			if recorder.Code != tt.wantStatus {
 				t.Errorf("status = %d, want %d", recorder.Code, tt.wantStatus)
@@ -89,7 +90,7 @@ func TestRouter(t *testing.T) {
 }
 
 func TestRouterErrorsOverHTTP(t *testing.T) {
-	server := httptest.NewServer(handler.NewRouter())
+	server := httptest.NewServer(handler.NewRouter(slog.New(slog.NewJSONHandler(io.Discard, nil))))
 	defer server.Close()
 	client := server.Client()
 	client.Timeout = 5 * time.Second
@@ -164,7 +165,7 @@ func assertRouterBody(t *testing.T, body []byte, wantBody string) {
 }
 
 func TestRouterHealthOverHTTP(t *testing.T) {
-	server := httptest.NewServer(handler.NewRouter())
+	server := httptest.NewServer(handler.NewRouter(slog.New(slog.NewJSONHandler(io.Discard, nil))))
 	defer server.Close()
 
 	client := server.Client()
