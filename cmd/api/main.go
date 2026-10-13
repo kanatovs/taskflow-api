@@ -13,6 +13,8 @@ import (
 	"github.com/kanatovs/taskflow-api/internal/handler"
 	"github.com/kanatovs/taskflow-api/internal/platform/database"
 	"github.com/kanatovs/taskflow-api/internal/platform/httpserver"
+	"github.com/kanatovs/taskflow-api/internal/repository/postgres"
+	"github.com/kanatovs/taskflow-api/internal/service"
 )
 
 func main() {
@@ -35,10 +37,12 @@ func run() int {
 		return 1
 	}
 	defer pool.Close()
+	users := postgres.NewUserRepository(pool, cfg.DatabaseTimeout)
+	auth := handler.NewAuthHandler(service.NewAuthService(users))
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           handler.NewRouter(logger, handler.NewReadiness(pool, cfg.DatabaseTimeout)),
+		Handler:           handler.NewRouter(logger, handler.NewReadiness(pool, cfg.DatabaseTimeout), auth),
 		ReadHeaderTimeout: cfg.HTTPReadHeaderTimeout,
 		ReadTimeout:       cfg.HTTPReadTimeout,
 		WriteTimeout:      cfg.HTTPWriteTimeout,

@@ -53,7 +53,7 @@ Branch: `feature/authentication`
 - [x] TF-008 — Add user migrations, domain model, and PostgreSQL repository.
   Commit: `feat(users): add users schema and repository`
 
-- [ ] TF-009 — Implement registration with validation and bcrypt.
+- [x] TF-009 — Implement registration with validation and bcrypt.
   Endpoint: `POST /api/v1/auth/register`
   Commit: `feat(auth): implement user registration`
 

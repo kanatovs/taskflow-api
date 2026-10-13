@@ -8,7 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func NewRouter(logger *slog.Logger, readiness *Readiness) http.Handler {
+func NewRouter(logger *slog.Logger, readiness *Readiness, auth *AuthHandler) http.Handler {
 	router := chi.NewRouter()
 	router.Use(requestMiddleware(logger))
 	router.NotFound(func(w http.ResponseWriter, r *http.Request) {
@@ -22,6 +22,9 @@ func NewRouter(logger *slog.Logger, readiness *Readiness) http.Handler {
 	})
 	router.Get("/health", Health)
 	router.Get("/ready", readiness.ServeHTTP)
+	if auth != nil {
+		router.Post("/api/v1/auth/register", auth.Register)
+	}
 	return router
 }
 

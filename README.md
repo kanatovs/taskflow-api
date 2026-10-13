@@ -220,6 +220,19 @@ investigated; this manual block does not automatically assert every result.
 
 ## JSON responses and errors
 
+`POST /api/v1/auth/register` accepts a JSON object with `email`, `password`, and
+`display_name`. Unknown fields, malformed JSON, multiple JSON values, and bodies
+over 4096 bytes are rejected with `400`. Email is trimmed and lowercased; this
+epic supports ASCII email addresses with a dotted DNS domain. Display names are
+trimmed and contain 1 to 100 characters without control characters. Passwords
+contain 12 to 72 bytes (bcrypt's maximum), are not trimmed, and are stored only
+as bcrypt hashes at the default cost. Blank-only passwords are rejected.
+
+Successful registration returns `201` with the user in `data`, including its ID
+and UTC timestamps, without password data. Duplicate normalized email returns
+`409`; validation returns `400`; unexpected persistence failures return a safe
+`500`. Database uniqueness handles concurrent duplicate registration.
+
 Successful resource responses use a `data` envelope. Errors use a separate
 `error` envelope with a stable machine-readable code, a safe message, and a
 `details` object. When there are no details, it is an empty object, not `null`.
