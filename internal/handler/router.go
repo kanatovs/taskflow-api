@@ -8,7 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func NewRouter(logger *slog.Logger) http.Handler {
+func NewRouter(logger *slog.Logger, readiness *Readiness) http.Handler {
 	router := chi.NewRouter()
 	router.Use(requestMiddleware(logger))
 	router.NotFound(func(w http.ResponseWriter, r *http.Request) {
@@ -21,6 +21,7 @@ func NewRouter(logger *slog.Logger) http.Handler {
 		writeError(w, r, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed", nil)
 	})
 	router.Get("/health", Health)
+	router.Get("/ready", readiness.ServeHTTP)
 	return router
 }
 

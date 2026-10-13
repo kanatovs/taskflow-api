@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -11,8 +12,10 @@ import (
 	"unicode"
 )
 
-// Config contains the settings used to start the HTTP server.
+// Config contains the settings used to start the application.
 type Config struct {
+	DatabaseURL           string
+	DatabaseTimeout       time.Duration
 	HTTPAddr              string
 	HTTPReadHeaderTimeout time.Duration
 	HTTPReadTimeout       time.Duration
@@ -30,8 +33,17 @@ func Load() (Config, error) {
 	if err := validateHTTPAddr(cfg.HTTPAddr); err != nil {
 		return Config{}, fmt.Errorf("HTTP_ADDR: %w", err)
 	}
+	cfg.DatabaseURL = os.Getenv("DATABASE_URL")
+	parsed, parseErr := url.Parse(cfg.DatabaseURL)
+	if parseErr != nil || parsed == nil || (parsed.Scheme != "postgres" && parsed.Scheme != "postgresql") || parsed.Hostname() == "" || parsed.Path == "" || parsed.Path == "/" {
+		return Config{}, errors.New("DATABASE_URL: must be a PostgreSQL URL with a host and database name")
+	}
 
 	var err error
+	cfg.DatabaseTimeout, err = loadDuration("DATABASE_TIMEOUT", 3*time.Second)
+	if err != nil {
+		return Config{}, err
+	}
 	cfg.HTTPReadHeaderTimeout, err = loadDuration("HTTP_READ_HEADER_TIMEOUT", 5*time.Second)
 	if err != nil {
 		return Config{}, err

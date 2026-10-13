@@ -47,7 +47,7 @@ Acceptance:
 
 Branch: `feature/authentication`
 
-- [ ] TF-007 — Add pgx PostgreSQL pool and database readiness check.
+- [x] TF-007 — Add pgx PostgreSQL pool and database readiness check.
   Commit: `feat(db): add PostgreSQL connection pool`
 
 - [ ] TF-008 — Add user migrations, domain model, and PostgreSQL repository.

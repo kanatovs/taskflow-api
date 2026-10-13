@@ -6,6 +6,8 @@ services:
       - "127.0.0.1:${API_PORT:-8080}:8080"
     environment:
       HTTP_ADDR: ":8080"
+      DATABASE_URL: "${DATABASE_URL-postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable}"
+      DATABASE_TIMEOUT: "${DATABASE_TIMEOUT-3s}"
       # Preserve explicitly empty values so application validation rejects them.
       HTTP_READ_HEADER_TIMEOUT: "${HTTP_READ_HEADER_TIMEOUT-5s}"
       HTTP_READ_TIMEOUT: "${HTTP_READ_TIMEOUT-10s}"

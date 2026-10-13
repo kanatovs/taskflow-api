@@ -11,6 +11,8 @@ import (
 
 func TestLoad(t *testing.T) {
 	defaults := config.Config{
+		DatabaseURL:           "postgres://test:test@127.0.0.1:5432/test",
+		DatabaseTimeout:       3 * time.Second,
 		HTTPAddr:              ":8080",
 		HTTPReadHeaderTimeout: 5 * time.Second,
 		HTTPReadTimeout:       10 * time.Second,
@@ -42,6 +44,8 @@ func TestLoad(t *testing.T) {
 				"HTTP_SHUTDOWN_TIMEOUT":    "25s",
 			},
 			want: config.Config{
+				DatabaseURL:           "postgres://test:test@127.0.0.1:5432/test",
+				DatabaseTimeout:       3 * time.Second,
 				HTTPAddr:              "127.0.0.1:9090",
 				HTTPReadHeaderTimeout: 2 * time.Second,
 				HTTPReadTimeout:       15 * time.Second,
@@ -183,6 +187,8 @@ func assertLoadError(t *testing.T, name string) {
 
 func unsetConfigEnv(t *testing.T) {
 	t.Helper()
+	t.Setenv("DATABASE_URL", "postgres://test:test@127.0.0.1:5432/test")
+	t.Setenv("DATABASE_TIMEOUT", "3s")
 	for _, name := range []string{
 		"HTTP_ADDR",
 		"HTTP_READ_HEADER_TIMEOUT",

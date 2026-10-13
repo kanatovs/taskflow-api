@@ -43,7 +43,8 @@ Requires Go 1.26.9 or a newer supported, patched release. Keep the local
 toolchain current: Go security fixes also update the standard library compiled
 into the API binary. Run from the repository root:
 
-```sh
+```powershell
+$env:DATABASE_URL = "postgres://taskflow:local_example_only@127.0.0.1:5432/taskflow?sslmode=disable"
 go run ./cmd/api
 ```
 
@@ -109,7 +110,9 @@ adjust `-U` and `-d` if you change those settings.
 Compose reads `.env` for variable interpolation and explicitly passes HTTP
 settings to `api` and database settings to `postgres`. Shell environment values
 take precedence over `.env`. The Go application still reads only its process
-environment; `go run ./cmd/api` does not load `.env`.
+environment; `go run ./cmd/api` does not load `.env`. Compose derives the API's
+`DATABASE_URL` from PostgreSQL settings when unset. Set an explicit URL when
+credentials need percent-encoding; its hostname inside Compose is `postgres`.
 
 | Compose setting | Example/default | Meaning |
 | --- | --- | --- |
@@ -136,10 +139,11 @@ local environment files, Git data, and build output from the build context.
 PostgreSQL uses the official `postgres:17-alpine` image and a named
 `postgres_data` volume at `/var/lib/postgresql/data`. The `POSTGRES_USER` created
 by this image is a database superuser; these credentials are intended only for
-this local development environment. Database connection and readiness checks
-in the API are future work in TF-007. Currently the API and PostgreSQL start
-independently. The PostgreSQL healthcheck uses `pg_isready`; the API healthcheck
-calls `/health`, which does not verify database availability.
+this local development environment. The API uses a lazy pgxpool connection pool.
+PostgreSQL outages do not prevent HTTP startup or `GET /health`. `GET /ready`
+pings PostgreSQL with a deadline: it returns `200` with
+`{"data":{"status":"ready"}}` or a safe `503` error. The PostgreSQL healthcheck
+uses `pg_isready`; the API healthcheck calls `/health`.
 
 To inspect logs and check graceful shutdown:
 
@@ -289,6 +293,8 @@ a restart. The application does not read `.env` files.
 | `HTTP_WRITE_TIMEOUT` | `10s` | Maximum time to write the response |
 | `HTTP_IDLE_TIMEOUT` | `60s` | Maximum time to wait for the next request on a keep-alive connection |
 | `HTTP_SHUTDOWN_TIMEOUT` | `10s` | Maximum time to wait for active requests during shutdown |
+| `DATABASE_URL` | Required | PostgreSQL URL, including credentials and database name |
+| `DATABASE_TIMEOUT` | `3s` | Connection and readiness timeout |
 
 `HTTP_ADDR` accepts an empty host, an IP address, or a hostname, with a numeric
 port from `1` to `65535`. For example: `:8080`, `127.0.0.1:8081`,
@@ -306,6 +312,7 @@ To use a different address in Windows PowerShell:
 
 ```powershell
 $env:HTTP_ADDR = "127.0.0.1:8081"
+$env:DATABASE_URL = "postgres://taskflow:local_example_only@127.0.0.1:5432/taskflow?sslmode=disable"
 go run ./cmd/api
 ```
 
