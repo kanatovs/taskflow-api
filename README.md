@@ -333,6 +333,40 @@ containing `HTTP_WRITE_TIMEOUT: must be greater than zero`.
 
 ## Verification
 
+### User schema and migrations
+
+Apply migrations explicitly before using database-backed endpoints; the API does
+not modify the schema at startup:
+
+```powershell
+docker compose up -d --wait postgres
+docker compose run --rm migrate up
+```
+
+The tools-profile service uses golang-migrate and read-only SQL files from
+`migrations/`. Repeating `up` reports `no change`. Migration 1 creates `users`
+with a generated bigint ID, TIMESTAMPTZ timestamps, a unique normalized email,
+and checks for nonempty password hashes and display names. Repositories use
+parameterized SQL with per-operation deadlines. User JSON omits password hashes.
+
+To run PostgreSQL tests, start a separate Compose project and set the test URL:
+
+```powershell
+$env:POSTGRES_PORT = "15433"
+docker compose --env-file .env.example -p taskflow-auth-check up -d --wait postgres
+$env:TEST_POSTGRES_URL = "postgres://taskflow:local_example_only@127.0.0.1:15433/taskflow?sslmode=disable"
+go test ./...
+Remove-Item Env:TEST_POSTGRES_URL
+Remove-Item Env:POSTGRES_PORT
+```
+
+Reserve this project for tests. Repository tests create uniquely named
+`taskflow_test_*` databases, apply the migration, and drop only those databases
+at cleanup. Without `TEST_POSTGRES_URL`, PostgreSQL tests are skipped. Use only
+the disposable local Compose instance. The ordinary development volume is
+never removed by the tests. Migration down/up checks run only on disposable
+databases. Readiness tests also exercise an unavailable pool.
+
 ```sh
 go fmt ./...
 go test ./...

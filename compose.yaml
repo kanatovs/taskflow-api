@@ -39,5 +39,12 @@ services:
       retries: 10
       start_period: 10s
 
+  migrate:
+    image: migrate/migrate:v4.20.1
+    profiles: ["tools"]
+    volumes:
+      - ./migrations:/migrations:ro
+    entrypoint: ["migrate", "-path", "/migrations", "-database", "${DATABASE_URL-postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable}"]
+
 volumes:
   postgres_data:
