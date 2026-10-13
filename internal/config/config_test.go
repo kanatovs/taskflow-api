@@ -11,6 +11,8 @@ import (
 
 func TestLoad(t *testing.T) {
 	defaults := config.Config{
+		JWTSecret:             "unit-test-secret-at-least-32-bytes",
+		JWTAccessTTL:          15 * time.Minute,
 		DatabaseURL:           "postgres://test:test@127.0.0.1:5432/test",
 		DatabaseTimeout:       3 * time.Second,
 		HTTPAddr:              ":8080",
@@ -44,6 +46,8 @@ func TestLoad(t *testing.T) {
 				"HTTP_SHUTDOWN_TIMEOUT":    "25s",
 			},
 			want: config.Config{
+				JWTSecret:             "unit-test-secret-at-least-32-bytes",
+				JWTAccessTTL:          15 * time.Minute,
 				DatabaseURL:           "postgres://test:test@127.0.0.1:5432/test",
 				DatabaseTimeout:       3 * time.Second,
 				HTTPAddr:              "127.0.0.1:9090",
@@ -187,6 +191,8 @@ func assertLoadError(t *testing.T, name string) {
 
 func unsetConfigEnv(t *testing.T) {
 	t.Helper()
+	t.Setenv("JWT_SECRET", "unit-test-secret-at-least-32-bytes")
+	t.Setenv("JWT_ACCESS_TTL", "15m")
 	t.Setenv("DATABASE_URL", "postgres://test:test@127.0.0.1:5432/test")
 	t.Setenv("DATABASE_TIMEOUT", "3s")
 	for _, name := range []string{

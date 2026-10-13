@@ -57,7 +57,7 @@ Branch: `feature/authentication`
   Endpoint: `POST /api/v1/auth/register`
   Commit: `feat(auth): implement user registration`
 
-- [ ] TF-010 — Implement login and JWT access-token generation.
+- [x] TF-010 — Implement login and JWT access-token generation.
   Endpoint: `POST /api/v1/auth/login`
   Commit: `feat(auth): implement login and JWT issuance`
 

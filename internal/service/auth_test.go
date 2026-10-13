@@ -11,7 +11,12 @@ import (
 )
 
 type userRepositoryStub struct {
-	create func(context.Context, domain.User) (domain.User, error)
+	create  func(context.Context, domain.User) (domain.User, error)
+	byEmail func(context.Context, string) (domain.User, error)
+}
+
+func (r userRepositoryStub) ByEmail(ctx context.Context, email string) (domain.User, error) {
+	return r.byEmail(ctx, email)
 }
 
 func (r userRepositoryStub) Create(ctx context.Context, user domain.User) (domain.User, error) {
@@ -37,7 +42,7 @@ func TestRegister(t *testing.T) {
 		user.ID = 1
 		return user, nil
 	}}
-	user, err := NewAuthService(repo).Register(ctx, validRegistration())
+	user, err := NewAuthService(repo, nil).Register(ctx, validRegistration())
 	if err != nil || user.ID != 1 {
 		t.Fatalf("Register: %v", err)
 	}
@@ -68,7 +73,7 @@ func TestRegisterValidation(t *testing.T) {
 				t.Fatal("repository called for invalid input")
 				return domain.User{}, nil
 			}}
-			_, err := NewAuthService(repo).Register(context.Background(), input)
+			_, err := NewAuthService(repo, nil).Register(context.Background(), input)
 			var validation *domain.ValidationError
 			if !errors.As(err, &validation) || validation.Fields[tt.field] == "" {
 				t.Fatalf("validation: %v", err)
@@ -80,13 +85,13 @@ func TestRegisterValidation(t *testing.T) {
 func TestRegisterRepositoryErrors(t *testing.T) {
 	for _, failure := range []error{domain.ErrEmailExists, errors.New("repository failure")} {
 		repo := userRepositoryStub{create: func(context.Context, domain.User) (domain.User, error) { return domain.User{}, failure }}
-		if _, err := NewAuthService(repo).Register(context.Background(), validRegistration()); !errors.Is(err, failure) {
+		if _, err := NewAuthService(repo, nil).Register(context.Background(), validRegistration()); !errors.Is(err, failure) {
 			t.Fatalf("error lost: %v", err)
 		}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := NewAuthService(userRepositoryStub{}).Register(ctx, validRegistration()); !errors.Is(err, context.Canceled) {
+	if _, err := NewAuthService(userRepositoryStub{}, nil).Register(ctx, validRegistration()); !errors.Is(err, context.Canceled) {
 		t.Fatal("cancelled request processed")
 	}
 }

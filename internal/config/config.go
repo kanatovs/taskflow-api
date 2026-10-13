@@ -16,6 +16,8 @@ import (
 type Config struct {
 	DatabaseURL           string
 	DatabaseTimeout       time.Duration
+	JWTSecret             string
+	JWTAccessTTL          time.Duration
 	HTTPAddr              string
 	HTTPReadHeaderTimeout time.Duration
 	HTTPReadTimeout       time.Duration
@@ -40,6 +42,17 @@ func Load() (Config, error) {
 	}
 
 	var err error
+	cfg.JWTSecret = os.Getenv("JWT_SECRET")
+	if len(cfg.JWTSecret) < 32 || strings.TrimSpace(cfg.JWTSecret) == "" {
+		return Config{}, errors.New("JWT_SECRET: must contain at least 32 bytes and not be blank")
+	}
+	cfg.JWTAccessTTL, err = loadDuration("JWT_ACCESS_TTL", 15*time.Minute)
+	if err != nil {
+		return Config{}, err
+	}
+	if cfg.JWTAccessTTL < time.Second {
+		return Config{}, errors.New("JWT_ACCESS_TTL: must be at least one second")
+	}
 	cfg.DatabaseTimeout, err = loadDuration("DATABASE_TIMEOUT", 3*time.Second)
 	if err != nil {
 		return Config{}, err

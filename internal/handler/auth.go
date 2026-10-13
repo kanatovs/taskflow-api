@@ -13,11 +13,26 @@ import (
 
 type AuthService interface {
 	Register(context.Context, service.RegisterInput) (domain.User, error)
+	Login(context.Context, service.LoginInput) (domain.AccessToken, error)
 }
 
 type AuthHandler struct{ service AuthService }
 
 func NewAuthHandler(service AuthService) *AuthHandler { return &AuthHandler{service: service} }
+
+func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
+	var input service.LoginInput
+	if !decodeRequest(w, r, &input) {
+		return
+	}
+	access, err := h.service.Login(r.Context(), input)
+	if err != nil {
+		writeServiceError(w, r, "login user", err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeData(w, r, http.StatusOK, access)
+}
 
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var input service.RegisterInput
@@ -59,6 +74,8 @@ func writeServiceError(w http.ResponseWriter, r *http.Request, operation string,
 		writeError(w, r, http.StatusBadRequest, "validation_error", "Request validation failed", details)
 	case errors.Is(err, domain.ErrEmailExists):
 		writeError(w, r, http.StatusConflict, "conflict", "Email already registered", nil)
+	case errors.Is(err, domain.ErrInvalidCredentials):
+		writeError(w, r, http.StatusUnauthorized, "unauthenticated", "Invalid email or password", nil)
 	default:
 		kind := "unexpected"
 		if errors.Is(err, context.DeadlineExceeded) {

@@ -45,6 +45,7 @@ into the API binary. Run from the repository root:
 
 ```powershell
 $env:DATABASE_URL = "postgres://taskflow:local_example_only@127.0.0.1:5432/taskflow?sslmode=disable"
+$env:JWT_SECRET = "local_example_only_change_me_32_bytes_minimum"
 go run ./cmd/api
 ```
 
@@ -233,6 +234,23 @@ and UTC timestamps, without password data. Duplicate normalized email returns
 `409`; validation returns `400`; unexpected persistence failures return a safe
 `500`. Database uniqueness handles concurrent duplicate registration.
 
+`POST /api/v1/auth/login` accepts `email` and `password` under the same strict
+JSON rules. Login passwords contain 1 to 72 bytes; email uses the registration
+format and normalization. Missing or invalid fields return `400`. Unknown
+emails and incorrect passwords return the same `401` error: `Invalid email or
+password`. Successful login returns `200` and a non-cacheable `data` object:
+
+```json
+{"data":{"access_token":"<signed JWT>","token_type":"Bearer","expires_in":900}}
+```
+
+Tokens use HS256 with a secret read from `JWT_SECRET` (at least 32 bytes), a
+15-minute default lifetime, and only `sub` (decimal user ID), `iat`, and `exp`
+claims. There are no refresh tokens. Choose a random secret for a deployment;
+the public `.env.example` secret is for local checks only. If an existing `.env`
+predates authentication, add `JWT_SECRET` and optionally `JWT_ACCESS_TTL` before
+starting the updated API. The application never logs tokens or password data.
+
 Successful resource responses use a `data` envelope. Errors use a separate
 `error` envelope with a stable machine-readable code, a safe message, and a
 `details` object. When there are no details, it is an empty object, not `null`.
@@ -308,6 +326,8 @@ a restart. The application does not read `.env` files.
 | `HTTP_SHUTDOWN_TIMEOUT` | `10s` | Maximum time to wait for active requests during shutdown |
 | `DATABASE_URL` | Required | PostgreSQL URL, including credentials and database name |
 | `DATABASE_TIMEOUT` | `3s` | Connection and readiness timeout |
+| `JWT_SECRET` | Required | HMAC secret, at least 32 bytes, not blank |
+| `JWT_ACCESS_TTL` | `15m` | Access token lifetime, at least one second |
 
 `HTTP_ADDR` accepts an empty host, an IP address, or a hostname, with a numeric
 port from `1` to `65535`. For example: `:8080`, `127.0.0.1:8081`,

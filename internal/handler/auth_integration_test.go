@@ -2,6 +2,7 @@ package handler_test
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http/httptest"
@@ -9,7 +10,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/kanatovs/taskflow-api/internal/domain"
 	"github.com/kanatovs/taskflow-api/internal/handler"
+	"github.com/kanatovs/taskflow-api/internal/platform/token"
 	"github.com/kanatovs/taskflow-api/internal/repository/postgres"
 	"github.com/kanatovs/taskflow-api/internal/service"
 	"github.com/kanatovs/taskflow-api/internal/testutil"
@@ -19,7 +23,11 @@ import (
 func TestRegistrationPostgresIntegration(t *testing.T) {
 	pool := testutil.Postgres(t)
 	repo := postgres.NewUserRepository(pool, time.Second)
-	router := handler.NewRouter(slog.New(slog.NewTextHandler(io.Discard, nil)), handler.NewReadiness(pool, time.Second), handler.NewAuthHandler(service.NewAuthService(repo)))
+	issuer, err := token.NewJWT("unit-test-secret-at-least-32-bytes", time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := handler.NewRouter(slog.New(slog.NewTextHandler(io.Discard, nil)), handler.NewReadiness(pool, time.Second), handler.NewAuthHandler(service.NewAuthService(repo, issuer)))
 	body := `{"email":" User@Example.com ","password":"strong-password-123","display_name":"Test User"}`
 	for _, want := range []int{201, 409} {
 		w := httptest.NewRecorder()
@@ -34,5 +42,21 @@ func TestRegistrationPostgresIntegration(t *testing.T) {
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte("strong-password-123")); err != nil {
 		t.Fatal("stored password is not bcrypt")
+	}
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest("POST", "/api/v1/auth/login", strings.NewReader(`{"email":"USER@example.com","password":"strong-password-123"}`)))
+	if w.Code != 200 {
+		t.Fatalf("login status=%d", w.Code)
+	}
+	var response struct {
+		Data domain.AccessToken `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	claims := &jwt.RegisteredClaims{}
+	parsed, err := jwt.ParseWithClaims(response.Data.AccessToken, claims, func(*jwt.Token) (any, error) { return []byte("unit-test-secret-at-least-32-bytes"), nil }, jwt.WithValidMethods([]string{"HS256"}), jwt.WithExpirationRequired())
+	if err != nil || !parsed.Valid || claims.Subject == "" {
+		t.Fatalf("invalid login JWT: %v", err)
 	}
 }
