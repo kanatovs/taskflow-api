@@ -65,7 +65,7 @@ Branch: `feature/authentication`
   Endpoint: `GET /api/v1/users/me`
   Commit: `feat(auth): add authentication middleware`
 
-- [ ] TF-012 — Complete authentication handler, service, and repository tests.
+- [x] TF-012 — Complete authentication handler, service, and repository tests.
   Commit: `test(auth): cover authentication flow`
 
 Acceptance:

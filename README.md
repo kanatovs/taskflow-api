@@ -28,6 +28,9 @@ Development follows small, reviewable roadmap tasks. The repository-level
   on `:8080` by default.
 - Structured JSON logging, HTTP panic recovery, and graceful shutdown.
 - Docker Compose environment for the API and PostgreSQL with persistent storage.
+- PostgreSQL connection pooling and public `GET /ready` readiness checks.
+- User registration with bcrypt, login with JWT, and authenticated current-user
+  lookup at `GET /api/v1/users/me`.
 - Public `GET /health` endpoint returning `200 OK` and JSON:
 
   ```json
@@ -355,6 +358,7 @@ To use a different address in Windows PowerShell:
 ```powershell
 $env:HTTP_ADDR = "127.0.0.1:8081"
 $env:DATABASE_URL = "postgres://taskflow:local_example_only@127.0.0.1:5432/taskflow?sslmode=disable"
+$env:JWT_SECRET = "local_example_only_change_me_32_bytes_minimum"
 go run ./cmd/api
 ```
 
@@ -408,6 +412,35 @@ at cleanup. Without `TEST_POSTGRES_URL`, PostgreSQL tests are skipped. Use only
 the disposable local Compose instance. The ordinary development volume is
 never removed by the tests. Migration down/up checks run only on disposable
 databases. Readiness tests also exercise an unavailable pool.
+
+Authentication tests cover strict JSON and validation boundaries, normalized
+duplicate emails (including concurrent registration), stored bcrypt hashes,
+login without account disclosure, JWT signing and verification, malformed
+Bearer headers, current-user lookup, repository failures, SQL constraints,
+query cancellation, deadlines, connection cleanup, and migration down/up.
+An HTTP integration test runs registration/login/current-user requests against
+the real PostgreSQL repository in a fresh database and checks secret-free logs.
+
+Run the repeatable Docker smoke script from Windows PowerShell:
+
+```powershell
+./scripts/auth-smoke.ps1
+```
+
+It creates a fresh `taskflow-auth-smoke-*` Compose project with public example
+settings, ports `18081` and `15434`, and a separate volume. Use `-ApiPort` and
+`-PostgresPort` to choose other available ports. It verifies migration
+up/repeated-up/down/up, builds the API, checks authentication HTTP responses and
+safe logs, stops only its own PostgreSQL, verifies `/health` stays `200` while
+`/ready` returns `503`, then checks recovery and graceful API shutdown. Finally
+it removes only its own project and test volume and restores environment
+overrides. It never edits `.env` or touches the development volume.
+
+This epic supports ASCII emails and password-based access tokens. Refresh
+tokens, token revocation, project permissions, and rate limiting are outside
+its scope. Tokens expire according to `JWT_ACCESS_TTL`; rotating `JWT_SECRET`
+invalidates signatures created with the old secret. A deleted user's token is
+rejected at current-user lookup. Migrations are an explicit setup step.
 
 ```sh
 go fmt ./...
