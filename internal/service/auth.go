@@ -16,6 +16,7 @@ import (
 type UserRepository interface {
 	Create(context.Context, domain.User) (domain.User, error)
 	ByEmail(context.Context, string) (domain.User, error)
+	ByID(context.Context, int64) (domain.User, error)
 }
 
 type TokenIssuer interface {
@@ -29,6 +30,23 @@ type AuthService struct {
 
 func NewAuthService(users UserRepository, tokens TokenIssuer) *AuthService {
 	return &AuthService{users: users, tokens: tokens}
+}
+
+func (s *AuthService) Me(ctx context.Context, userID int64) (domain.User, error) {
+	if err := ctx.Err(); err != nil {
+		return domain.User{}, err
+	}
+	if userID <= 0 {
+		return domain.User{}, domain.ErrUnauthenticated
+	}
+	user, err := s.users.ByID(ctx, userID)
+	if errors.Is(err, domain.ErrNotFound) {
+		return domain.User{}, domain.ErrUnauthenticated
+	}
+	if err != nil {
+		return domain.User{}, fmt.Errorf("find current user: %w", err)
+	}
+	return user, nil
 }
 
 type LoginInput struct {

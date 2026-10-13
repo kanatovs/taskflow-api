@@ -61,7 +61,7 @@ Branch: `feature/authentication`
   Endpoint: `POST /api/v1/auth/login`
   Commit: `feat(auth): implement login and JWT issuance`
 
-- [ ] TF-011 — Add authentication middleware and current-user endpoint.
+- [x] TF-011 — Add authentication middleware and current-user endpoint.
   Endpoint: `GET /api/v1/users/me`
   Commit: `feat(auth): add authentication middleware`
 

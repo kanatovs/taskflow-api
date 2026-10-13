@@ -52,7 +52,7 @@ func TestLoginHTTP(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var logs bytes.Buffer
 			repo := &loginRepository{user: domain.User{ID: 1, PasswordHash: string(hash)}, lookupErr: tt.repoErr}
-			router := NewRouter(slog.New(slog.NewJSONHandler(&logs, nil)), nil, NewAuthHandler(service.NewAuthService(repo, issuer)))
+			router := NewRouter(slog.New(slog.NewJSONHandler(&logs, nil)), nil, NewAuthHandler(service.NewAuthService(repo, issuer), issuer))
 			w := httptest.NewRecorder()
 			router.ServeHTTP(w, httptest.NewRequest("POST", "/api/v1/auth/login", strings.NewReader(tt.body)))
 			if w.Code != tt.status {

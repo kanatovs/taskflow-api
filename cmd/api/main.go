@@ -44,7 +44,7 @@ func run() int {
 		logger.Error("JWT configuration failed", "error", err)
 		return 1
 	}
-	auth := handler.NewAuthHandler(service.NewAuthService(users, tokens))
+	auth := handler.NewAuthHandler(service.NewAuthService(users, tokens), tokens)
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,

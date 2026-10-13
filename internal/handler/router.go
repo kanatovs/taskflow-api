@@ -25,6 +25,7 @@ func NewRouter(logger *slog.Logger, readiness *Readiness, auth *AuthHandler) htt
 	if auth != nil {
 		router.Post("/api/v1/auth/register", auth.Register)
 		router.Post("/api/v1/auth/login", auth.Login)
+		router.With(auth.Authenticate).Get("/api/v1/users/me", auth.Me)
 	}
 	return router
 }

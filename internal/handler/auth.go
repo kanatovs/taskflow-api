@@ -14,11 +14,34 @@ import (
 type AuthService interface {
 	Register(context.Context, service.RegisterInput) (domain.User, error)
 	Login(context.Context, service.LoginInput) (domain.AccessToken, error)
+	Me(context.Context, int64) (domain.User, error)
 }
 
-type AuthHandler struct{ service AuthService }
+type TokenVerifier interface{ Verify(string) (int64, error) }
 
-func NewAuthHandler(service AuthService) *AuthHandler { return &AuthHandler{service: service} }
+type AuthHandler struct {
+	service AuthService
+	tokens  TokenVerifier
+}
+
+func NewAuthHandler(service AuthService, tokens TokenVerifier) *AuthHandler {
+	return &AuthHandler{service: service, tokens: tokens}
+}
+
+func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(userIDContextKey{}).(int64)
+	if !ok {
+		writeServiceError(w, r, "current user", domain.ErrUnauthenticated)
+		return
+	}
+	user, err := h.service.Me(r.Context(), userID)
+	if err != nil {
+		writeServiceError(w, r, "current user", err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeData(w, r, http.StatusOK, user)
+}
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var input service.LoginInput
@@ -76,6 +99,9 @@ func writeServiceError(w http.ResponseWriter, r *http.Request, operation string,
 		writeError(w, r, http.StatusConflict, "conflict", "Email already registered", nil)
 	case errors.Is(err, domain.ErrInvalidCredentials):
 		writeError(w, r, http.StatusUnauthorized, "unauthenticated", "Invalid email or password", nil)
+	case errors.Is(err, domain.ErrUnauthenticated):
+		w.Header().Set("WWW-Authenticate", "Bearer")
+		writeError(w, r, http.StatusUnauthorized, "unauthenticated", "Authentication required", nil)
 	default:
 		kind := "unexpected"
 		if errors.Is(err, context.DeadlineExceeded) {

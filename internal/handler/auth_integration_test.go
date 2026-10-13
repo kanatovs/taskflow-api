@@ -27,7 +27,7 @@ func TestRegistrationPostgresIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	router := handler.NewRouter(slog.New(slog.NewTextHandler(io.Discard, nil)), handler.NewReadiness(pool, time.Second), handler.NewAuthHandler(service.NewAuthService(repo, issuer)))
+	router := handler.NewRouter(slog.New(slog.NewTextHandler(io.Discard, nil)), handler.NewReadiness(pool, time.Second), handler.NewAuthHandler(service.NewAuthService(repo, issuer), issuer))
 	body := `{"email":" User@Example.com ","password":"strong-password-123","display_name":"Test User"}`
 	for _, want := range []int{201, 409} {
 		w := httptest.NewRecorder()
@@ -58,5 +58,12 @@ func TestRegistrationPostgresIntegration(t *testing.T) {
 	parsed, err := jwt.ParseWithClaims(response.Data.AccessToken, claims, func(*jwt.Token) (any, error) { return []byte("unit-test-secret-at-least-32-bytes"), nil }, jwt.WithValidMethods([]string{"HS256"}), jwt.WithExpirationRequired())
 	if err != nil || !parsed.Valid || claims.Subject == "" {
 		t.Fatalf("invalid login JWT: %v", err)
+	}
+	me := httptest.NewRecorder()
+	request := httptest.NewRequest("GET", "/api/v1/users/me", nil)
+	request.Header.Set("Authorization", "Bearer "+response.Data.AccessToken)
+	router.ServeHTTP(me, request)
+	if me.Code != 200 || strings.Contains(me.Body.String(), "password") {
+		t.Fatalf("me status=%d body=%s", me.Code, me.Body.String())
 	}
 }

@@ -13,6 +13,11 @@ import (
 type userRepositoryStub struct {
 	create  func(context.Context, domain.User) (domain.User, error)
 	byEmail func(context.Context, string) (domain.User, error)
+	byID    func(context.Context, int64) (domain.User, error)
+}
+
+func (r userRepositoryStub) ByID(ctx context.Context, id int64) (domain.User, error) {
+	return r.byID(ctx, id)
 }
 
 func (r userRepositoryStub) ByEmail(ctx context.Context, email string) (domain.User, error) {

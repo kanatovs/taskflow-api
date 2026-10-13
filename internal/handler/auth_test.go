@@ -22,6 +22,10 @@ func (r *registerRepository) ByEmail(context.Context, string) (domain.User, erro
 	return domain.User{}, domain.ErrNotFound
 }
 
+func (r *registerRepository) ByID(context.Context, int64) (domain.User, error) {
+	return domain.User{}, domain.ErrNotFound
+}
+
 func (r *registerRepository) Create(_ context.Context, user domain.User) (domain.User, error) {
 	r.calls++
 	user.ID = 1
@@ -50,7 +54,7 @@ func TestRegistrationHTTP(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var logs bytes.Buffer
 			repo := &registerRepository{err: tt.err}
-			router := NewRouter(slog.New(slog.NewJSONHandler(&logs, nil)), nil, NewAuthHandler(service.NewAuthService(repo, nil)))
+			router := NewRouter(slog.New(slog.NewJSONHandler(&logs, nil)), nil, NewAuthHandler(service.NewAuthService(repo, nil), nil))
 			w := httptest.NewRecorder()
 			router.ServeHTTP(w, httptest.NewRequest("POST", "/api/v1/auth/register", strings.NewReader(tt.body)))
 			if w.Code != tt.status || repo.calls != tt.calls {

@@ -251,6 +251,15 @@ the public `.env.example` secret is for local checks only. If an existing `.env`
 predates authentication, add `JWT_SECRET` and optionally `JWT_ACCESS_TTL` before
 starting the updated API. The application never logs tokens or password data.
 
+`GET /api/v1/users/me` requires `Authorization: Bearer <access token>` and returns
+the current user in `data` without password data. The middleware verifies HS256,
+signature, required expiration and issued-at timestamps, and a positive decimal
+user ID in `sub`, then puts the ID in the request context. Missing, malformed,
+invalid, or expired credentials return `401` with `WWW-Authenticate: Bearer`.
+An authenticated token whose user no longer exists also returns `401`.
+Unexpected repository failures return a safe `500`. The response is not cached.
+`/health`, `/ready`, registration, and login remain public.
+
 Successful resource responses use a `data` envelope. Errors use a separate
 `error` envelope with a stable machine-readable code, a safe message, and a
 `details` object. When there are no details, it is an empty object, not `null`.
