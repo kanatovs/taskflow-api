@@ -40,6 +40,10 @@ function Send-Request([string]$Method, [string]$Path, [string]$Body = '', [strin
         $response = $httpClient.SendAsync($request).GetAwaiter().GetResult()
         try {
             $content = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+            if ($response.Content.Headers.ContentType.MediaType -ne 'application/json') { throw 'Response is not JSON' }
+            foreach ($sensitive in @('"password', 'strong-password-123', 'wrong-password', '$2a$', '$2b$', '$2y$')) {
+                if ($content.Contains($sensitive)) { throw 'Password or password hash found in response' }
+            }
             return [PSCustomObject]@{ Status = [int]$response.StatusCode; Body = $content }
         } finally { $response.Dispose() }
     } finally { $request.Dispose() }
@@ -48,6 +52,17 @@ function Send-Request([string]$Method, [string]$Path, [string]$Body = '', [strin
 function Assert-Status($Response, [int]$Expected, [string]$Label) {
     if ($Response.Status -ne $Expected) { throw "$Label returned $($Response.Status), expected $Expected" }
     Write-Output "${Label}: $Expected"
+}
+
+function Assert-Schema([bool]$ExpectedSuccess, [string]$Label, [string]$Setup = '') {
+    $sql = $Setup + "`n" + (Get-Content -Raw -LiteralPath './scripts/check-users-schema.sql')
+    # Failed checks inside a transaction close the connection and roll it back.
+    $output = $sql | & docker compose @composeArguments exec -T postgres sh -c 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1' 2>&1
+    $succeeded = $LASTEXITCODE -eq 0
+    if ($succeeded -ne $ExpectedSuccess) {
+        throw "$Label produced an unexpected result: $($output -join ' ')"
+    }
+    Write-Output "${Label}: passed"
 }
 
 function ConvertTo-Base64Url([byte[]]$Bytes) {
@@ -77,10 +92,21 @@ try {
     # The explicit example URL targets only this disposable project's service.
     Invoke-Compose -Arguments @('config', '--quiet')
     Invoke-Compose -Arguments @('up', '-d', '--wait', 'postgres')
+    Assert-Schema $false 'Missing schema rejected'
     Invoke-Compose -Arguments @('run', '--rm', 'migrate', 'up')
+    Invoke-Compose -Arguments @('run', '--rm', 'migrate', 'version')
+    Assert-Schema $true 'Migrated users schema'
     Invoke-Compose -Arguments @('run', '--rm', 'migrate', 'up')
+    Assert-Schema $true 'Repeated migration preserves schema'
+    Assert-Schema $false 'Missing users table rejected' 'BEGIN; DROP TABLE public.users;'
+    Assert-Schema $false 'Invalid users column rejected' 'BEGIN; ALTER TABLE public.users ALTER COLUMN email DROP NOT NULL;'
+    Assert-Schema $false 'Missing unique constraint rejected' 'BEGIN; ALTER TABLE public.users DROP CONSTRAINT users_email_key;'
+    Assert-Schema $false 'Dirty migration rejected' 'BEGIN; UPDATE public.schema_migrations SET dirty=true;'
+    Assert-Schema $true 'Negative checks leave schema unchanged'
     Invoke-Compose -Arguments @('run', '--rm', 'migrate', 'down', '1')
+    Assert-Schema $false 'Rolled-back schema rejected'
     Invoke-Compose -Arguments @('run', '--rm', 'migrate', 'up')
+    Assert-Schema $true 'Restored users schema'
     Invoke-Compose -Arguments @('up', '-d', '--build', '--wait', 'api')
     Add-Type -AssemblyName System.Net.Http
     $httpClient = [System.Net.Http.HttpClient]::new()

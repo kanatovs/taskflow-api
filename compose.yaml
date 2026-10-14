@@ -44,9 +44,19 @@ services:
   migrate:
     image: migrate/migrate:v4.20.1
     profiles: ["tools"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "${DATABASE_URL-postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable}"
     volumes:
       - ./migrations:/migrations:ro
-    entrypoint: ["migrate", "-path", "/migrations", "-database", "${DATABASE_URL-postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable}"]
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - 'exec migrate -path /migrations -database "$${DATABASE_URL:?DATABASE_URL is required}" "$$@"'
+      - migrate
+    command: ["up"]
 
 volumes:
   postgres_data:

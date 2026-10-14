@@ -44,7 +44,8 @@ check database or cache availability.
 
 Requires Go 1.26.9 or a newer supported, patched release. Keep the local
 toolchain current: Go security fixes also update the standard library compiled
-into the API binary. Run from the repository root:
+into the API binary. First create `.env` and start/migrate PostgreSQL as described
+in the Docker Compose section below. Then run from the repository root:
 
 ```powershell
 $env:DATABASE_URL = "postgres://taskflow:local_example_only@127.0.0.1:5432/taskflow?sslmode=disable"
@@ -99,8 +100,9 @@ From the repository root:
 
 ```powershell
 docker compose config --quiet
-docker compose build
-docker compose up -d --wait
+docker compose up -d --wait postgres
+docker compose run --rm migrate up
+docker compose up -d --build --wait api
 docker compose ps
 curl.exe -i http://localhost:8080/health
 docker compose exec -T postgres psql -U taskflow -d taskflow -v ON_ERROR_STOP=1 -c "SELECT 1;"
@@ -114,9 +116,13 @@ adjust `-U` and `-d` if you change those settings.
 Compose reads `.env` for variable interpolation and explicitly passes HTTP
 settings to `api` and database settings to `postgres`. Shell environment values
 take precedence over `.env`. The Go application still reads only its process
-environment; `go run ./cmd/api` does not load `.env`. Compose derives the API's
-`DATABASE_URL` from PostgreSQL settings when unset. Set an explicit URL when
-credentials need percent-encoding; its hostname inside Compose is `postgres`.
+environment; `go run ./cmd/api` does not load `.env`. Compose derives
+`DATABASE_URL` for both `api` and `migrate` from PostgreSQL settings when unset.
+Set an explicit URL when credentials need percent-encoding; its hostname and
+port inside Compose must be `postgres:5432`. Remove a host-only `DATABASE_URL`
+override before Compose commands (`Remove-Item Env:DATABASE_URL` in PowerShell,
+or `unset DATABASE_URL` in a POSIX shell). Migrations receive only the database
+URL, not the API's JWT secret.
 
 | Compose setting | Example/default | Meaning |
 | --- | --- | --- |
@@ -171,6 +177,8 @@ docker compose down
 ```
 
 The named volume survives `down` and is reused on the next `up`.
+**Warning: `docker compose down -v` deletes the local PostgreSQL volume and all
+database data.** It is not a migration or repair command.
 `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` only initialize an empty
 data directory. Editing `.env` does not change credentials in an existing
 database. Do not delete a volume to change a password if it contains data you
@@ -387,10 +395,43 @@ not modify the schema at startup:
 ```powershell
 docker compose up -d --wait postgres
 docker compose run --rm migrate up
+docker compose run --rm migrate version
 ```
 
-The tools-profile service uses golang-migrate and read-only SQL files from
-`migrations/`. Repeating `up` reports `no change`. Migration 1 creates `users`
+The `migrate` tools-profile service waits for the Compose PostgreSQL healthcheck,
+uses golang-migrate and read-only SQL files from `./migrations`, and exits with a
+nonzero status on failure. It is selected directly by `compose run`; no explicit
+profile flag or host migrate installation is needed. Repeating `up` reports
+`no change`. golang-migrate records the version and dirty flag in
+`public.schema_migrations`; `version` should report `1` without `(dirty)` after
+the authentication migration succeeds. Inspect the database state directly:
+
+```powershell
+docker compose exec -T postgres sh -c 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -c "SELECT version, dirty FROM public.schema_migrations;" -c "\dt public.*" -c "\d public.users"'
+Get-Content -Raw ./scripts/check-users-schema.sql | docker compose exec -T postgres sh -c 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1'
+```
+
+The SQL check is read-only. It fails if the migration state, users columns,
+defaults, or constraints differ from migration 1, including an absent table.
+In a POSIX shell, feed the same file with
+`docker compose exec -T postgres sh -c 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1' < scripts/check-users-schema.sql`.
+`GET /ready` checks connectivity only; a `200` does not prove tables exist.
+Run migrations and this schema check before authentication requests.
+
+To roll back exactly one migration deliberately:
+
+```powershell
+docker compose run --rm migrate down 1
+```
+
+**Warning: rolling back migration 1 drops `users` and deletes all user data.**
+Use rollback only when that data loss is intended, preferably in a disposable
+database. Restore the schema with `docker compose run --rm migrate up`; deleted
+data is not restored. A failed migration leaves a dirty state: inspect the error
+and repair the cause before continuing. Do not use `force` to hide a failed
+migration, or remove the development volume to repair migration state.
+
+Migration 1 creates `users`
 with a generated bigint ID, TIMESTAMPTZ timestamps, a unique normalized email,
 and checks for nonempty password hashes and display names. Repositories use
 parameterized SQL with per-operation deadlines. User JSON omits password hashes.
@@ -430,7 +471,8 @@ Run the repeatable Docker smoke script from Windows PowerShell:
 It creates a fresh `taskflow-auth-smoke-*` Compose project with public example
 settings, ports `18081` and `15434`, and a separate volume. Use `-ApiPort` and
 `-PostgresPort` to choose other available ports. It verifies migration
-up/repeated-up/down/up, builds the API, checks authentication HTTP responses and
+up/repeated-up/down/up and migration state, rejects missing/invalid users schemas
+with the SQL regression check, builds the API, checks authentication responses and
 safe logs, stops only its own PostgreSQL, verifies `/health` stays `200` while
 `/ready` returns `503`, then checks recovery and graceful API shutdown. Finally
 it removes only its own project and test volume and restores environment
