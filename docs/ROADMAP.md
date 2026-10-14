@@ -100,7 +100,7 @@ Branch: `feature/project-management`
   - `DELETE /api/v1/projects/{projectID}/members/{userID}`
   Commit: `feat(projects): add membership and role management`
 
-- [ ] TF-016 — Complete project authorization and permission tests.
+- [x] TF-016 — Complete project authorization and permission tests.
   Commit: `test(projects): cover project permissions`
 
 Acceptance:

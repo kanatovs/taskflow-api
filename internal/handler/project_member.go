@@ -29,6 +29,7 @@ func (h *ProjectHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	r = withProjectLogger(r, project)
 	members, total, err := h.members.List(r.Context(), actor, project, page, size)
 	if err != nil {
 		writeServiceError(w, r, "list project members", err)
@@ -50,6 +51,7 @@ func (h *ProjectHandler) AddMember(w http.ResponseWriter, r *http.Request) {
 	if !decodeRequest(w, r, &input) {
 		return
 	}
+	r = withProjectLogger(r, project)
 	member, err := h.members.Add(r.Context(), actor, project, input)
 	if err != nil {
 		writeServiceError(w, r, "add project member", err)
@@ -76,6 +78,7 @@ func (h *ProjectHandler) UpdateMember(w http.ResponseWriter, r *http.Request) {
 	if !decodeRequest(w, r, &input) {
 		return
 	}
+	r = withProjectLogger(r, project)
 	member, err := h.members.Update(r.Context(), actor, project, user, input)
 	if err != nil {
 		writeServiceError(w, r, "update project member", err)
@@ -97,6 +100,7 @@ func (h *ProjectHandler) DeleteMember(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	r = withProjectLogger(r, project)
 	if err := h.members.Delete(r.Context(), actor, project, user); err != nil {
 		writeServiceError(w, r, "delete project member", err)
 		return

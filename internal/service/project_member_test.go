@@ -4,33 +4,85 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/kanatovs/taskflow-api/internal/domain"
 )
 
 type memberStoreFake struct {
-	target domain.ProjectRole
-	err    error
-	writes int
+	target  domain.ProjectRole
+	err     error
+	writes  int
+	readErr error
+	ctx     context.Context
 }
 
-func (f *memberStoreFake) ByUser(context.Context, int64, int64) (domain.ProjectMember, error) {
-	return domain.ProjectMember{Role: f.target}, f.err
+func (f *memberStoreFake) ByUser(ctx context.Context, _ int64, _ int64) (domain.ProjectMember, error) {
+	f.ctx = ctx
+	return domain.ProjectMember{Role: f.target}, f.readErr
 }
-func (f *memberStoreFake) List(context.Context, int64, int64, int, int) ([]domain.ProjectMember, int, error) {
+func (f *memberStoreFake) List(ctx context.Context, _ int64, _ int64, _ int, _ int) ([]domain.ProjectMember, int, error) {
+	f.ctx = ctx
 	return []domain.ProjectMember{}, 0, f.err
 }
-func (f *memberStoreFake) Add(context.Context, int64, int64, int64, domain.ProjectRole) (domain.ProjectMember, error) {
+func (f *memberStoreFake) Add(ctx context.Context, _ int64, _ int64, _ int64, _ domain.ProjectRole) (domain.ProjectMember, error) {
+	f.ctx = ctx
 	f.writes++
 	return domain.ProjectMember{}, f.err
 }
-func (f *memberStoreFake) Update(context.Context, int64, int64, int64, domain.ProjectRole) (domain.ProjectMember, error) {
+func (f *memberStoreFake) Update(ctx context.Context, _ int64, _ int64, _ int64, _ domain.ProjectRole) (domain.ProjectMember, error) {
+	f.ctx = ctx
 	f.writes++
 	return domain.ProjectMember{}, f.err
 }
-func (f *memberStoreFake) Delete(context.Context, int64, int64, int64) error {
+func (f *memberStoreFake) Delete(ctx context.Context, _ int64, _ int64, _ int64) error {
+	f.ctx = ctx
 	f.writes++
 	return f.err
+}
+
+func TestMembershipServiceFailuresAndContext(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	failure := errors.New("repository unavailable")
+	projects := NewProjectService(&projectStoreFake{project: domain.Project{ID: 1}}, projectMembersFake{role: domain.RoleOwner}, projectUsersFake{})
+	repo := &memberStoreFake{target: domain.RoleMember, err: failure}
+	s := NewProjectMemberService(projects, repo)
+	for _, operation := range []func(context.Context) error{
+		func(ctx context.Context) error { _, _, err := s.List(ctx, 1, 1, 1, 20); return err },
+		func(ctx context.Context) error {
+			_, err := s.Add(ctx, 1, 1, AddProjectMemberInput{UserID: 2, Role: domain.RoleMember})
+			return err
+		},
+		func(ctx context.Context) error {
+			_, err := s.Update(ctx, 1, 1, 2, UpdateProjectMemberInput{Role: domain.RoleAdmin})
+			return err
+		},
+		func(ctx context.Context) error { return s.Delete(ctx, 1, 1, 2) },
+	} {
+		if err := operation(ctx); !errors.Is(err, failure) {
+			t.Fatalf("repository failure lost: %v", err)
+		}
+		if repo.ctx != ctx {
+			t.Fatal("membership service replaced context")
+		}
+		cancelled, cancelRequest := context.WithCancel(ctx)
+		cancelRequest()
+		repo.writes = 0
+		if err := operation(cancelled); !errors.Is(err, context.Canceled) || repo.writes != 0 {
+			t.Fatal("cancelled membership operation reached persistence")
+		}
+	}
+	repo.err, repo.readErr = nil, domain.ErrNotFound
+	if _, err := s.Update(ctx, 1, 1, 2, UpdateProjectMemberInput{Role: domain.RoleAdmin}); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatal("missing membership lost")
+	}
+	for _, input := range []AddProjectMemberInput{{UserID: 0, Role: domain.RoleMember}, {UserID: 2, Role: domain.RoleOwner}, {UserID: 2, Role: ""}} {
+		var validation *domain.ValidationError
+		if _, err := s.Add(ctx, 1, 1, input); !errors.As(err, &validation) {
+			t.Fatal("invalid membership accepted")
+		}
+	}
 }
 
 func TestMembershipServicePermissions(t *testing.T) {

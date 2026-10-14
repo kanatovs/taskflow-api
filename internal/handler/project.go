@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
@@ -42,6 +43,7 @@ func (h *ProjectHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Location", "/api/v1/projects/"+strconv.FormatInt(p.ID, 10))
+	r = withProjectLogger(r, p.ID)
 	writeData(w, r, http.StatusCreated, p)
 }
 
@@ -71,6 +73,7 @@ func (h *ProjectHandler) Get(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	r = withProjectLogger(r, projectID)
 	p, err := h.service.Get(r.Context(), userID, projectID)
 	if err != nil {
 		writeServiceError(w, r, "get project", err)
@@ -92,6 +95,7 @@ func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if !decodeRequest(w, r, &changes) {
 		return
 	}
+	r = withProjectLogger(r, projectID)
 	p, err := h.service.Update(r.Context(), userID, projectID, changes)
 	if err != nil {
 		writeServiceError(w, r, "update project", err)
@@ -109,11 +113,16 @@ func (h *ProjectHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	r = withProjectLogger(r, projectID)
 	if err := h.service.Delete(r.Context(), userID, projectID); err != nil {
 		writeServiceError(w, r, "delete project", err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func withProjectLogger(r *http.Request, projectID int64) *http.Request {
+	return r.WithContext(context.WithValue(r.Context(), loggerContextKey{}, requestLogger(r).With("project_id", projectID)))
 }
 
 func authenticatedUser(w http.ResponseWriter, r *http.Request) (int64, bool) {
@@ -136,7 +145,12 @@ func parseID(w http.ResponseWriter, r *http.Request, parameter string) (int64, b
 
 func parsePage(w http.ResponseWriter, r *http.Request) (int, int, bool) {
 	page, size := 1, 20
-	for key, values := range r.URL.Query() {
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
+		writeError(w, r, http.StatusBadRequest, "validation_error", "Malformed query parameters", nil)
+		return 0, 0, false
+	}
+	for key, values := range query {
 		if (key != "page" && key != "page_size") || len(values) != 1 {
 			writeError(w, r, 400, "validation_error", "Unsupported or repeated query parameter", nil)
 			return 0, 0, false

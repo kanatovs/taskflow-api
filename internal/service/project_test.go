@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kanatovs/taskflow-api/internal/domain"
 )
@@ -14,12 +15,28 @@ type projectStoreFake struct {
 	err     error
 	writes  int
 	changes domain.ProjectChanges
+	ctx     context.Context
 }
 
 func (f *projectStoreFake) Create(ctx context.Context, p domain.Project) (domain.Project, error) {
+	f.ctx = ctx
 	f.writes++
 	f.project = p
 	return p, f.err
+}
+
+func TestProjectServicePreservesContext(t *testing.T) {
+	type contextKey struct{}
+	ctx, cancel := context.WithTimeout(context.WithValue(context.Background(), contextKey{}, "request-value"), time.Minute)
+	defer cancel()
+	repo := &projectStoreFake{}
+	s := NewProjectService(repo, projectMembersFake{role: domain.RoleOwner}, projectUsersFake{})
+	if _, err := s.Create(ctx, 1, CreateProjectInput{Name: "Context"}); err != nil {
+		t.Fatal(err)
+	}
+	if repo.ctx != ctx || repo.ctx.Value(contextKey{}) != "request-value" {
+		t.Fatal("service replaced the request context")
+	}
 }
 func (f *projectStoreFake) ByID(context.Context, int64) (domain.Project, error) {
 	return f.project, f.err

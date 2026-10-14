@@ -486,7 +486,8 @@ list members; the same `page`/`page_size` limits apply, ordered by user ID.
 POST requires `{"user_id":42,"role":"member"}`; PATCH requires
 `{"role":"admin"}`. Target users must already exist. No email invitations
 are sent. Responses contain only `project_id`, `user_id`, `role`, and
-`joined_at`; password hashes and other user credentials are never selected.
+`joined_at`. Membership listing queries never select passwords, and responses
+never contain user credentials.
 
 | Actor | Add | Change role | Remove |
 | --- | --- | --- | --- |
@@ -502,6 +503,26 @@ the project in the URL. Mutations lock the project row, then recheck actor and
 target roles inside the transaction, so concurrent permission changes cannot
 bypass the service's checks. This serializes writes within a project; writes
 to separate projects can proceed independently.
+
+Run the project and membership Docker smoke checks from PowerShell:
+
+```powershell
+./scripts/projects-smoke.ps1
+```
+
+The script uses a fresh `taskflow-project-smoke-*` project, a separate volume,
+public example credentials, and ports 18082/15436 (overridable with `-ApiPort`
+and `-PostgresPort`). It verifies migration up/repeated-up/down/up, schema
+constraints, registration/login, project CRUD, membership permissions, owner
+protection, cross-project rejection, secret-free responses/logs, and graceful
+shutdown. It removes only its own test project/volume and restores environment
+overrides. The development database and `.env` are preserved.
+
+For Go integration checks, set `TEST_POSTGRES_URL` to a disposable local
+PostgreSQL instance and run `go test ./...`. Each test uses its own database.
+Tests also exercise transaction rollback, duplicate membership races,
+independent concurrent PATCH fields, role changes while a write waits on a
+project lock, request cancellation/deadlines, and connection cleanup.
 
 To run PostgreSQL tests, start a separate Compose project and set the test URL:
 
