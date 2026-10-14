@@ -30,3 +30,17 @@ type ProjectMember struct {
 	Role      ProjectRole `json:"role"`
 	JoinedAt  time.Time   `json:"joined_at"`
 }
+
+// Empty current/requested roles represent adding/removing a membership.
+func CanManageProjectMember(actor, current, requested ProjectRole) bool {
+	if current == RoleOwner || requested == RoleOwner {
+		return false
+	}
+	if requested != "" && requested != RoleAdmin && requested != RoleMember {
+		return false
+	}
+	if actor == RoleOwner {
+		return true
+	}
+	return actor == RoleAdmin && (current == "" || current == RoleMember) && (requested == "" || requested == RoleMember)
+}

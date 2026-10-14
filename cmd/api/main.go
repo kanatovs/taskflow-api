@@ -47,7 +47,8 @@ func run() int {
 	auth := handler.NewAuthHandler(service.NewAuthService(users, tokens), tokens)
 	projects := postgres.NewProjectRepository(pool, cfg.DatabaseTimeout)
 	members := postgres.NewProjectMemberRepository(pool, cfg.DatabaseTimeout)
-	projectHandler := handler.NewProjectHandler(service.NewProjectService(projects, members, users))
+	projectService := service.NewProjectService(projects, members, users)
+	projectHandler := handler.NewProjectHandler(projectService, service.NewProjectMemberService(projectService, members))
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,

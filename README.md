@@ -30,6 +30,7 @@ Development follows small, reviewable roadmap tasks. The repository-level
 - Docker Compose environment for the API and PostgreSQL with persistent storage.
 - PostgreSQL connection pooling and public `GET /ready` readiness checks.
 - Protected project CRUD with owner/admin/member permissions and member-only listing.
+- Project membership management using existing user IDs, with protected owner roles.
 - User registration with bcrypt, login with JWT, and authenticated current-user
   lookup at `GET /api/v1/users/me`.
 - Public `GET /health` endpoint returning `200 OK` and JSON:
@@ -470,7 +471,37 @@ Listing accepts only `page` (default 1) and `page_size` (default 20, maximum
 `page_size`, and `total`. Empty pages return `data: []`. No search or advanced
 filters are supported. Missing authentication returns 401, non-members or
 insufficient roles 403, missing resources 404, and invalid input 400.
-Membership management endpoints are not implemented yet.
+
+## Project membership API
+
+| Method | Path | Success |
+| --- | --- | --- |
+| GET | `/api/v1/projects/{projectID}/members` | 200 |
+| POST | `/api/v1/projects/{projectID}/members` | 201 |
+| PATCH | `/api/v1/projects/{projectID}/members/{userID}` | 200 |
+| DELETE | `/api/v1/projects/{projectID}/members/{userID}` | 204, empty body |
+
+All endpoints require authentication and project membership. Any member can
+list members; the same `page`/`page_size` limits apply, ordered by user ID.
+POST requires `{"user_id":42,"role":"member"}`; PATCH requires
+`{"role":"admin"}`. Target users must already exist. No email invitations
+are sent. Responses contain only `project_id`, `user_id`, `role`, and
+`joined_at`; password hashes and other user credentials are never selected.
+
+| Actor | Add | Change role | Remove |
+| --- | --- | --- | --- |
+| Owner | Admin or member | Admin/member to admin/member | Admin or member |
+| Admin | Member only | Member to member only (no-op) | Member only |
+| Member | Forbidden | Forbidden | Forbidden |
+
+Owner membership cannot be demoted or removed, including by the owner.
+Ownership transfer is not supported. Duplicate membership returns 409;
+missing users/memberships/projects return 404, invalid roles return 400, and
+insufficient permissions return 403. Each membership operation is scoped to
+the project in the URL. Mutations lock the project row, then recheck actor and
+target roles inside the transaction, so concurrent permission changes cannot
+bypass the service's checks. This serializes writes within a project; writes
+to separate projects can proceed independently.
 
 To run PostgreSQL tests, start a separate Compose project and set the test URL:
 

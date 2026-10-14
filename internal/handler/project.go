@@ -18,10 +18,13 @@ type ProjectService interface {
 	Delete(context.Context, int64, int64) error
 }
 
-type ProjectHandler struct{ service ProjectService }
+type ProjectHandler struct {
+	service ProjectService
+	members ProjectMemberService
+}
 
-func NewProjectHandler(service ProjectService) *ProjectHandler {
-	return &ProjectHandler{service: service}
+func NewProjectHandler(service ProjectService, members ProjectMemberService) *ProjectHandler {
+	return &ProjectHandler{service: service, members: members}
 }
 
 func (h *ProjectHandler) Create(w http.ResponseWriter, r *http.Request) {

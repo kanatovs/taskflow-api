@@ -92,7 +92,7 @@ Branch: `feature/project-management`
   - `DELETE /api/v1/projects/{projectID}`
   Commit: `feat(projects): implement project CRUD`
 
-- [ ] TF-015 — Implement membership and role management.
+- [x] TF-015 — Implement membership and role management.
   Endpoints:
   - `GET /api/v1/projects/{projectID}/members`
   - `POST /api/v1/projects/{projectID}/members`

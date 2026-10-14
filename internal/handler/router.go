@@ -34,6 +34,12 @@ func NewRouter(logger *slog.Logger, readiness *Readiness, auth *AuthHandler, pro
 				r.Get("/{projectID}", projects.Get)
 				r.Patch("/{projectID}", projects.Update)
 				r.Delete("/{projectID}", projects.Delete)
+				if projects.members != nil {
+					r.Get("/{projectID}/members", projects.ListMembers)
+					r.Post("/{projectID}/members", projects.AddMember)
+					r.Patch("/{projectID}/members/{userID}", projects.UpdateMember)
+					r.Delete("/{projectID}/members/{userID}", projects.DeleteMember)
+				}
 			})
 		}
 	}
