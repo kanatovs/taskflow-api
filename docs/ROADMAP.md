@@ -47,25 +47,25 @@ Acceptance:
 
 Branch: `feature/authentication`
 
-- [ ] TF-007 — Add pgx PostgreSQL pool and database readiness check.
+- [x] TF-007 — Add pgx PostgreSQL pool and database readiness check.
   Commit: `feat(db): add PostgreSQL connection pool`
 
-- [ ] TF-008 — Add user migrations, domain model, and PostgreSQL repository.
+- [x] TF-008 — Add user migrations, domain model, and PostgreSQL repository.
   Commit: `feat(users): add users schema and repository`
 
-- [ ] TF-009 — Implement registration with validation and bcrypt.
+- [x] TF-009 — Implement registration with validation and bcrypt.
   Endpoint: `POST /api/v1/auth/register`
   Commit: `feat(auth): implement user registration`
 
-- [ ] TF-010 — Implement login and JWT access-token generation.
+- [x] TF-010 — Implement login and JWT access-token generation.
   Endpoint: `POST /api/v1/auth/login`
   Commit: `feat(auth): implement login and JWT issuance`
 
-- [ ] TF-011 — Add authentication middleware and current-user endpoint.
+- [x] TF-011 — Add authentication middleware and current-user endpoint.
   Endpoint: `GET /api/v1/users/me`
   Commit: `feat(auth): add authentication middleware`
 
-- [ ] TF-012 — Complete authentication handler, service, and repository tests.
+- [x] TF-012 — Complete authentication handler, service, and repository tests.
   Commit: `test(auth): cover authentication flow`
 
 Acceptance:

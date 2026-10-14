@@ -8,7 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func NewRouter(logger *slog.Logger) http.Handler {
+func NewRouter(logger *slog.Logger, readiness *Readiness, auth *AuthHandler) http.Handler {
 	router := chi.NewRouter()
 	router.Use(requestMiddleware(logger))
 	router.NotFound(func(w http.ResponseWriter, r *http.Request) {
@@ -21,6 +21,12 @@ func NewRouter(logger *slog.Logger) http.Handler {
 		writeError(w, r, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed", nil)
 	})
 	router.Get("/health", Health)
+	router.Get("/ready", readiness.ServeHTTP)
+	if auth != nil {
+		router.Post("/api/v1/auth/register", auth.Register)
+		router.Post("/api/v1/auth/login", auth.Login)
+		router.With(auth.Authenticate).Get("/api/v1/users/me", auth.Me)
+	}
 	return router
 }
 

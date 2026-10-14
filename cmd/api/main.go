@@ -11,7 +11,11 @@ import (
 
 	"github.com/kanatovs/taskflow-api/internal/config"
 	"github.com/kanatovs/taskflow-api/internal/handler"
+	"github.com/kanatovs/taskflow-api/internal/platform/database"
 	"github.com/kanatovs/taskflow-api/internal/platform/httpserver"
+	"github.com/kanatovs/taskflow-api/internal/platform/token"
+	"github.com/kanatovs/taskflow-api/internal/repository/postgres"
+	"github.com/kanatovs/taskflow-api/internal/service"
 )
 
 func main() {
@@ -28,10 +32,23 @@ func run() int {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	pool, err := database.New(ctx, cfg.DatabaseURL, cfg.DatabaseTimeout)
+	if err != nil {
+		logger.Error("Database configuration failed", "error", err)
+		return 1
+	}
+	defer pool.Close()
+	users := postgres.NewUserRepository(pool, cfg.DatabaseTimeout)
+	tokens, err := token.NewJWT(cfg.JWTSecret, cfg.JWTAccessTTL)
+	if err != nil {
+		logger.Error("JWT configuration failed", "error", err)
+		return 1
+	}
+	auth := handler.NewAuthHandler(service.NewAuthService(users, tokens), tokens)
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           handler.NewRouter(logger),
+		Handler:           handler.NewRouter(logger, handler.NewReadiness(pool, cfg.DatabaseTimeout), auth),
 		ReadHeaderTimeout: cfg.HTTPReadHeaderTimeout,
 		ReadTimeout:       cfg.HTTPReadTimeout,
 		WriteTimeout:      cfg.HTTPWriteTimeout,

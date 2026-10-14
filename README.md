@@ -28,6 +28,9 @@ Development follows small, reviewable roadmap tasks. The repository-level
   on `:8080` by default.
 - Structured JSON logging, HTTP panic recovery, and graceful shutdown.
 - Docker Compose environment for the API and PostgreSQL with persistent storage.
+- PostgreSQL connection pooling and public `GET /ready` readiness checks.
+- User registration with bcrypt, login with JWT, and authenticated current-user
+  lookup at `GET /api/v1/users/me`.
 - Public `GET /health` endpoint returning `200 OK` and JSON:
 
   ```json
@@ -41,9 +44,12 @@ check database or cache availability.
 
 Requires Go 1.26.9 or a newer supported, patched release. Keep the local
 toolchain current: Go security fixes also update the standard library compiled
-into the API binary. Run from the repository root:
+into the API binary. First create `.env` and start/migrate PostgreSQL as described
+in the Docker Compose section below. Then run from the repository root:
 
-```sh
+```powershell
+$env:DATABASE_URL = "postgres://taskflow:local_example_only@127.0.0.1:5432/taskflow?sslmode=disable"
+$env:JWT_SECRET = "local_example_only_change_me_32_bytes_minimum"
 go run ./cmd/api
 ```
 
@@ -94,8 +100,9 @@ From the repository root:
 
 ```powershell
 docker compose config --quiet
-docker compose build
-docker compose up -d --wait
+docker compose up -d --wait postgres
+docker compose run --rm migrate up
+docker compose up -d --build --wait api
 docker compose ps
 curl.exe -i http://localhost:8080/health
 docker compose exec -T postgres psql -U taskflow -d taskflow -v ON_ERROR_STOP=1 -c "SELECT 1;"
@@ -109,7 +116,13 @@ adjust `-U` and `-d` if you change those settings.
 Compose reads `.env` for variable interpolation and explicitly passes HTTP
 settings to `api` and database settings to `postgres`. Shell environment values
 take precedence over `.env`. The Go application still reads only its process
-environment; `go run ./cmd/api` does not load `.env`.
+environment; `go run ./cmd/api` does not load `.env`. Compose derives
+`DATABASE_URL` for both `api` and `migrate` from PostgreSQL settings when unset.
+Set an explicit URL when credentials need percent-encoding; its hostname and
+port inside Compose must be `postgres:5432`. Remove a host-only `DATABASE_URL`
+override before Compose commands (`Remove-Item Env:DATABASE_URL` in PowerShell,
+or `unset DATABASE_URL` in a POSIX shell). Migrations receive only the database
+URL, not the API's JWT secret.
 
 | Compose setting | Example/default | Meaning |
 | --- | --- | --- |
@@ -136,10 +149,11 @@ local environment files, Git data, and build output from the build context.
 PostgreSQL uses the official `postgres:17-alpine` image and a named
 `postgres_data` volume at `/var/lib/postgresql/data`. The `POSTGRES_USER` created
 by this image is a database superuser; these credentials are intended only for
-this local development environment. Database connection and readiness checks
-in the API are future work in TF-007. Currently the API and PostgreSQL start
-independently. The PostgreSQL healthcheck uses `pg_isready`; the API healthcheck
-calls `/health`, which does not verify database availability.
+this local development environment. The API uses a lazy pgxpool connection pool.
+PostgreSQL outages do not prevent HTTP startup or `GET /health`. `GET /ready`
+pings PostgreSQL with a deadline: it returns `200` with
+`{"data":{"status":"ready"}}` or a safe `503` error. The PostgreSQL healthcheck
+uses `pg_isready`; the API healthcheck calls `/health`.
 
 To inspect logs and check graceful shutdown:
 
@@ -163,6 +177,8 @@ docker compose down
 ```
 
 The named volume survives `down` and is reused on the next `up`.
+**Warning: `docker compose down -v` deletes the local PostgreSQL volume and all
+database data.** It is not a migration or repair command.
 `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` only initialize an empty
 data directory. Editing `.env` does not change credentials in an existing
 database. Do not delete a volume to change a password if it contains data you
@@ -215,6 +231,45 @@ do not store development data in it. Other failed native commands must also be
 investigated; this manual block does not automatically assert every result.
 
 ## JSON responses and errors
+
+`POST /api/v1/auth/register` accepts a JSON object with `email`, `password`, and
+`display_name`. Unknown fields, malformed JSON, multiple JSON values, and bodies
+over 4096 bytes are rejected with `400`. Email is trimmed and lowercased; this
+epic supports ASCII email addresses with a dotted DNS domain. Display names are
+trimmed and contain 1 to 100 characters without control characters. Passwords
+contain 12 to 72 bytes (bcrypt's maximum), are not trimmed, and are stored only
+as bcrypt hashes at the default cost. Blank-only passwords are rejected.
+
+Successful registration returns `201` with the user in `data`, including its ID
+and UTC timestamps, without password data. Duplicate normalized email returns
+`409`; validation returns `400`; unexpected persistence failures return a safe
+`500`. Database uniqueness handles concurrent duplicate registration.
+
+`POST /api/v1/auth/login` accepts `email` and `password` under the same strict
+JSON rules. Login passwords contain 1 to 72 bytes; email uses the registration
+format and normalization. Missing or invalid fields return `400`. Unknown
+emails and incorrect passwords return the same `401` error: `Invalid email or
+password`. Successful login returns `200` and a non-cacheable `data` object:
+
+```json
+{"data":{"access_token":"<signed JWT>","token_type":"Bearer","expires_in":900}}
+```
+
+Tokens use HS256 with a secret read from `JWT_SECRET` (at least 32 bytes), a
+15-minute default lifetime, and only `sub` (decimal user ID), `iat`, and `exp`
+claims. There are no refresh tokens. Choose a random secret for a deployment;
+the public `.env.example` secret is for local checks only. If an existing `.env`
+predates authentication, add `JWT_SECRET` and optionally `JWT_ACCESS_TTL` before
+starting the updated API. The application never logs tokens or password data.
+
+`GET /api/v1/users/me` requires `Authorization: Bearer <access token>` and returns
+the current user in `data` without password data. The middleware verifies HS256,
+signature, required expiration and issued-at timestamps, and a positive decimal
+user ID in `sub`, then puts the ID in the request context. Missing, malformed,
+invalid, or expired credentials return `401` with `WWW-Authenticate: Bearer`.
+An authenticated token whose user no longer exists also returns `401`.
+Unexpected repository failures return a safe `500`. The response is not cached.
+`/health`, `/ready`, registration, and login remain public.
 
 Successful resource responses use a `data` envelope. Errors use a separate
 `error` envelope with a stable machine-readable code, a safe message, and a
@@ -289,6 +344,10 @@ a restart. The application does not read `.env` files.
 | `HTTP_WRITE_TIMEOUT` | `10s` | Maximum time to write the response |
 | `HTTP_IDLE_TIMEOUT` | `60s` | Maximum time to wait for the next request on a keep-alive connection |
 | `HTTP_SHUTDOWN_TIMEOUT` | `10s` | Maximum time to wait for active requests during shutdown |
+| `DATABASE_URL` | Required | PostgreSQL URL, including credentials and database name |
+| `DATABASE_TIMEOUT` | `3s` | Connection and readiness timeout |
+| `JWT_SECRET` | Required | HMAC secret, at least 32 bytes, not blank |
+| `JWT_ACCESS_TTL` | `15m` | Access token lifetime, at least one second |
 
 `HTTP_ADDR` accepts an empty host, an IP address, or a hostname, with a numeric
 port from `1` to `65535`. For example: `:8080`, `127.0.0.1:8081`,
@@ -306,6 +365,8 @@ To use a different address in Windows PowerShell:
 
 ```powershell
 $env:HTTP_ADDR = "127.0.0.1:8081"
+$env:DATABASE_URL = "postgres://taskflow:local_example_only@127.0.0.1:5432/taskflow?sslmode=disable"
+$env:JWT_SECRET = "local_example_only_change_me_32_bytes_minimum"
 go run ./cmd/api
 ```
 
@@ -325,6 +386,103 @@ For example, setting `HTTP_WRITE_TIMEOUT=0s` prevents startup with an error
 containing `HTTP_WRITE_TIMEOUT: must be greater than zero`.
 
 ## Verification
+
+### User schema and migrations
+
+Apply migrations explicitly before using database-backed endpoints; the API does
+not modify the schema at startup:
+
+```powershell
+docker compose up -d --wait postgres
+docker compose run --rm migrate up
+docker compose run --rm migrate version
+```
+
+The `migrate` tools-profile service waits for the Compose PostgreSQL healthcheck,
+uses golang-migrate and read-only SQL files from `./migrations`, and exits with a
+nonzero status on failure. It is selected directly by `compose run`; no explicit
+profile flag or host migrate installation is needed. Repeating `up` reports
+`no change`. golang-migrate records the version and dirty flag in
+`public.schema_migrations`; `version` should report `1` without `(dirty)` after
+the authentication migration succeeds. Inspect the database state directly:
+
+```powershell
+docker compose exec -T postgres sh -c 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -c "SELECT version, dirty FROM public.schema_migrations;" -c "\dt public.*" -c "\d public.users"'
+Get-Content -Raw ./scripts/check-users-schema.sql | docker compose exec -T postgres sh -c 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1'
+```
+
+The SQL check is read-only. It fails if the migration state, users columns,
+defaults, or constraints differ from migration 1, including an absent table.
+In a POSIX shell, feed the same file with
+`docker compose exec -T postgres sh -c 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1' < scripts/check-users-schema.sql`.
+`GET /ready` checks connectivity only; a `200` does not prove tables exist.
+Run migrations and this schema check before authentication requests.
+
+To roll back exactly one migration deliberately:
+
+```powershell
+docker compose run --rm migrate down 1
+```
+
+**Warning: rolling back migration 1 drops `users` and deletes all user data.**
+Use rollback only when that data loss is intended, preferably in a disposable
+database. Restore the schema with `docker compose run --rm migrate up`; deleted
+data is not restored. A failed migration leaves a dirty state: inspect the error
+and repair the cause before continuing. Do not use `force` to hide a failed
+migration, or remove the development volume to repair migration state.
+
+Migration 1 creates `users`
+with a generated bigint ID, TIMESTAMPTZ timestamps, a unique normalized email,
+and checks for nonempty password hashes and display names. Repositories use
+parameterized SQL with per-operation deadlines. User JSON omits password hashes.
+
+To run PostgreSQL tests, start a separate Compose project and set the test URL:
+
+```powershell
+$env:POSTGRES_PORT = "15433"
+docker compose --env-file .env.example -p taskflow-auth-check up -d --wait postgres
+$env:TEST_POSTGRES_URL = "postgres://taskflow:local_example_only@127.0.0.1:15433/taskflow?sslmode=disable"
+go test ./...
+Remove-Item Env:TEST_POSTGRES_URL
+Remove-Item Env:POSTGRES_PORT
+```
+
+Reserve this project for tests. Repository tests create uniquely named
+`taskflow_test_*` databases, apply the migration, and drop only those databases
+at cleanup. Without `TEST_POSTGRES_URL`, PostgreSQL tests are skipped. Use only
+the disposable local Compose instance. The ordinary development volume is
+never removed by the tests. Migration down/up checks run only on disposable
+databases. Readiness tests also exercise an unavailable pool.
+
+Authentication tests cover strict JSON and validation boundaries, normalized
+duplicate emails (including concurrent registration), stored bcrypt hashes,
+login without account disclosure, JWT signing and verification, malformed
+Bearer headers, current-user lookup, repository failures, SQL constraints,
+query cancellation, deadlines, connection cleanup, and migration down/up.
+An HTTP integration test runs registration/login/current-user requests against
+the real PostgreSQL repository in a fresh database and checks secret-free logs.
+
+Run the repeatable Docker smoke script from Windows PowerShell:
+
+```powershell
+./scripts/auth-smoke.ps1
+```
+
+It creates a fresh `taskflow-auth-smoke-*` Compose project with public example
+settings, ports `18081` and `15434`, and a separate volume. Use `-ApiPort` and
+`-PostgresPort` to choose other available ports. It verifies migration
+up/repeated-up/down/up and migration state, rejects missing/invalid users schemas
+with the SQL regression check, builds the API, checks authentication responses and
+safe logs, stops only its own PostgreSQL, verifies `/health` stays `200` while
+`/ready` returns `503`, then checks recovery and graceful API shutdown. Finally
+it removes only its own project and test volume and restores environment
+overrides. It never edits `.env` or touches the development volume.
+
+This epic supports ASCII emails and password-based access tokens. Refresh
+tokens, token revocation, project permissions, and rate limiting are outside
+its scope. Tokens expire according to `JWT_ACCESS_TTL`; rotating `JWT_SECRET`
+invalidates signatures created with the old secret. A deleted user's token is
+rejected at current-user lookup. Migrations are an explicit setup step.
 
 ```sh
 go fmt ./...

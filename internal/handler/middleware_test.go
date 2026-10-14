@@ -71,7 +71,7 @@ func TestRequestLogging(t *testing.T) {
 func TestRouterUsesRequestLogging(t *testing.T) {
 	var logs bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&logs, nil))
-	NewRouter(logger).ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/health", nil))
+	NewRouter(logger, nil, nil).ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/health", nil))
 	entries := decodeLogs(t, &logs)
 	if len(entries) != 1 || entries[0]["status"] != float64(http.StatusOK) {
 		t.Fatalf("router logs = %v, want a successful request event", entries)
