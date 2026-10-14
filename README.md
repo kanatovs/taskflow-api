@@ -403,8 +403,8 @@ uses golang-migrate and read-only SQL files from `./migrations`, and exits with 
 nonzero status on failure. It is selected directly by `compose run`; no explicit
 profile flag or host migrate installation is needed. Repeating `up` reports
 `no change`. golang-migrate records the version and dirty flag in
-`public.schema_migrations`; `version` should report `1` without `(dirty)` after
-the authentication migration succeeds. Inspect the database state directly:
+`public.schema_migrations`; `version` should report `2` without `(dirty)` after
+the user and project migrations succeed. Inspect the database state directly:
 
 ```powershell
 docker compose exec -T postgres sh -c 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -c "SELECT version, dirty FROM public.schema_migrations;" -c "\dt public.*" -c "\d public.users"'
@@ -424,7 +424,8 @@ To roll back exactly one migration deliberately:
 docker compose run --rm migrate down 1
 ```
 
-**Warning: rolling back migration 1 drops `users` and deletes all user data.**
+**Warning: rolling back migration 2 drops projects and memberships. Rolling back
+migration 1 drops `users` and deletes all user data.**
 Use rollback only when that data loss is intended, preferably in a disposable
 database. Restore the schema with `docker compose run --rm migrate up`; deleted
 data is not restored. A failed migration leaves a dirty state: inspect the error
@@ -435,6 +436,14 @@ Migration 1 creates `users`
 with a generated bigint ID, TIMESTAMPTZ timestamps, a unique normalized email,
 and checks for nonempty password hashes and display names. Repositories use
 parameterized SQL with per-operation deadlines. User JSON omits password hashes.
+
+Migration 2 creates `projects` and `project_members`. Foreign keys reference
+users, deleting a project cascades to its memberships, each project/user pair
+is unique, and roles are constrained to `owner`, `admin`, or `member`. A partial
+unique index permits only one owner membership per project. Project creation
+inserts the project and its owner membership in one transaction. User deletion
+is restricted while projects or memberships reference that user. Project HTTP
+endpoints are not implemented yet.
 
 To run PostgreSQL tests, start a separate Compose project and set the test URL:
 

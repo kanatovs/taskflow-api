@@ -80,7 +80,7 @@ Acceptance:
 
 Branch: `feature/project-management`
 
-- [ ] TF-013 — Add project and membership migrations, models, and repositories.
+- [x] TF-013 — Add project and membership migrations, models, and repositories.
   Commit: `feat(projects): add project membership schema`
 
 - [ ] TF-014 — Implement project CRUD.

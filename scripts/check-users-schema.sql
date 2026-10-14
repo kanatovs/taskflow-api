@@ -1,4 +1,4 @@
--- Read-only verification of the deployed authentication schema (migration 1).
+-- Read-only verification that user migration 1 is applied and the schema is clean.
 -- Run with psql -v ON_ERROR_STOP=1 so a mismatch returns a nonzero exit code.
 DO $$
 BEGIN
@@ -7,9 +7,9 @@ BEGIN
         RAISE EXCEPTION 'Authentication schema is missing; run migrations first';
     END IF;
 
-    IF (SELECT count(*) <> 1 OR bool_or(version <> 1 OR dirty)
+    IF (SELECT count(*) <> 1 OR bool_or(version < 1 OR dirty)
         FROM public.schema_migrations) THEN
-        RAISE EXCEPTION 'Expected migration version 1 with dirty=false';
+        RAISE EXCEPTION 'Expected user migration to be applied with dirty=false';
     END IF;
 
     IF EXISTS (
@@ -70,4 +70,4 @@ BEGIN
 END
 $$;
 
-SELECT 'Authentication schema matches migration 1; version=1, dirty=false' AS result;
+SELECT 'Authentication schema matches migration 1; dirty=false' AS result;

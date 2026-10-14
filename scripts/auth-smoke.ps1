@@ -98,12 +98,13 @@ try {
     Assert-Schema $true 'Migrated users schema'
     Invoke-Compose -Arguments @('run', '--rm', 'migrate', 'up')
     Assert-Schema $true 'Repeated migration preserves schema'
-    Assert-Schema $false 'Missing users table rejected' 'BEGIN; DROP TABLE public.users;'
+    Assert-Schema $false 'Missing users table rejected' 'BEGIN; DROP TABLE public.users CASCADE;'
     Assert-Schema $false 'Invalid users column rejected' 'BEGIN; ALTER TABLE public.users ALTER COLUMN email DROP NOT NULL;'
     Assert-Schema $false 'Missing unique constraint rejected' 'BEGIN; ALTER TABLE public.users DROP CONSTRAINT users_email_key;'
     Assert-Schema $false 'Dirty migration rejected' 'BEGIN; UPDATE public.schema_migrations SET dirty=true;'
     Assert-Schema $true 'Negative checks leave schema unchanged'
-    Invoke-Compose -Arguments @('run', '--rm', 'migrate', 'down', '1')
+    # Roll back the entire schema only in this script's freshly created database.
+    Invoke-Compose -Arguments @('run', '--rm', 'migrate', 'down', '-all')
     Assert-Schema $false 'Rolled-back schema rejected'
     Invoke-Compose -Arguments @('run', '--rm', 'migrate', 'up')
     Assert-Schema $true 'Restored users schema'
