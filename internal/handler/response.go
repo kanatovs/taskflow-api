@@ -9,6 +9,21 @@ type dataResponse struct {
 	Data any `json:"data"`
 }
 
+type collectionResponse struct {
+	Data any `json:"data"`
+	Meta struct {
+		Page     int `json:"page"`
+		PageSize int `json:"page_size"`
+		Total    int `json:"total"`
+	} `json:"meta"`
+}
+
+func writeCollection(w http.ResponseWriter, r *http.Request, data any, page, pageSize, total int) {
+	response := collectionResponse{Data: data}
+	response.Meta.Page, response.Meta.PageSize, response.Meta.Total = page, pageSize, total
+	writeJSON(w, r, http.StatusOK, response)
+}
+
 type errorResponse struct {
 	Error errorBody `json:"error"`
 }

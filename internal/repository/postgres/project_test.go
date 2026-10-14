@@ -85,10 +85,10 @@ func TestProjectRepositoryIntegration(t *testing.T) {
 		t.Fatal("out-of-range page lost total")
 	}
 	p.Name = "Updated"
-	if _, err := repo.Update(ctx, p, other.ID); !errors.Is(err, domain.ErrForbidden) {
+	if _, err := repo.Update(ctx, p.ID, other.ID, domain.ProjectChanges{Name: &p.Name}); !errors.Is(err, domain.ErrForbidden) {
 		t.Fatalf("unauthorized update: %v", err)
 	}
-	if _, err := repo.Update(ctx, p, owner.ID); err != nil {
+	if _, err := repo.Update(ctx, p.ID, owner.ID, domain.ProjectChanges{Name: &p.Name}); err != nil {
 		t.Fatal(err)
 	}
 	if err := repo.Delete(ctx, p.ID, other.ID); !errors.Is(err, domain.ErrForbidden) {

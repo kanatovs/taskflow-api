@@ -83,7 +83,7 @@ Branch: `feature/project-management`
 - [x] TF-013 — Add project and membership migrations, models, and repositories.
   Commit: `feat(projects): add project membership schema`
 
-- [ ] TF-014 — Implement project CRUD.
+- [x] TF-014 — Implement project CRUD.
   Endpoints:
   - `POST /api/v1/projects`
   - `GET /api/v1/projects`

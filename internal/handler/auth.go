@@ -97,6 +97,12 @@ func writeServiceError(w http.ResponseWriter, r *http.Request, operation string,
 		writeError(w, r, http.StatusBadRequest, "validation_error", "Request validation failed", details)
 	case errors.Is(err, domain.ErrEmailExists):
 		writeError(w, r, http.StatusConflict, "conflict", "Email already registered", nil)
+	case errors.Is(err, domain.ErrNotFound):
+		writeError(w, r, http.StatusNotFound, "not_found", "Resource not found", nil)
+	case errors.Is(err, domain.ErrForbidden):
+		writeError(w, r, http.StatusForbidden, "forbidden", "Permission denied", nil)
+	case errors.Is(err, domain.ErrConflict):
+		writeError(w, r, http.StatusConflict, "conflict", "Resource conflict", nil)
 	case errors.Is(err, domain.ErrInvalidCredentials):
 		writeError(w, r, http.StatusUnauthorized, "unauthenticated", "Invalid email or password", nil)
 	case errors.Is(err, domain.ErrUnauthenticated):

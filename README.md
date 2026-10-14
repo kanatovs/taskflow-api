@@ -29,6 +29,7 @@ Development follows small, reviewable roadmap tasks. The repository-level
 - Structured JSON logging, HTTP panic recovery, and graceful shutdown.
 - Docker Compose environment for the API and PostgreSQL with persistent storage.
 - PostgreSQL connection pooling and public `GET /ready` readiness checks.
+- Protected project CRUD with owner/admin/member permissions and member-only listing.
 - User registration with bcrypt, login with JWT, and authenticated current-user
   lookup at `GET /api/v1/users/me`.
 - Public `GET /health` endpoint returning `200 OK` and JSON:
@@ -442,8 +443,34 @@ users, deleting a project cascades to its memberships, each project/user pair
 is unique, and roles are constrained to `owner`, `admin`, or `member`. A partial
 unique index permits only one owner membership per project. Project creation
 inserts the project and its owner membership in one transaction. User deletion
-is restricted while projects or memberships reference that user. Project HTTP
-endpoints are not implemented yet.
+is restricted while projects or memberships reference that user.
+
+## Project API
+
+All project endpoints require a Bearer access token. The creator is the owner.
+
+| Method | Path | Permission | Success |
+| --- | --- | --- | --- |
+| POST | `/api/v1/projects` | Authenticated user | 201 |
+| GET | `/api/v1/projects` | Only the caller's projects | 200 |
+| GET | `/api/v1/projects/{projectID}` | Any project member | 200 |
+| PATCH | `/api/v1/projects/{projectID}` | Owner or admin | 200 |
+| DELETE | `/api/v1/projects/{projectID}` | Owner | 204, empty body |
+
+Create accepts `{"name":"Portfolio","description":"Optional description"}`.
+Names are trimmed and contain 1 to 100 characters without control characters.
+Descriptions default to an empty string and contain at most 2000 characters;
+line breaks and tabs are allowed. JSON bodies are limited to 4096 bytes and
+unknown fields are rejected. PATCH accepts `name`, `description`, or both;
+omitted/null fields are preserved, and an empty patch returns 400. Set
+`description` to `""` to clear it. Ownership cannot be changed.
+
+Listing accepts only `page` (default 1) and `page_size` (default 20, maximum
+100), orders by project ID, and returns `data` plus `meta` with `page`,
+`page_size`, and `total`. Empty pages return `data: []`. No search or advanced
+filters are supported. Missing authentication returns 401, non-members or
+insufficient roles 403, missing resources 404, and invalid input 400.
+Membership management endpoints are not implemented yet.
 
 To run PostgreSQL tests, start a separate Compose project and set the test URL:
 

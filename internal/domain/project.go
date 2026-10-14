@@ -13,6 +13,11 @@ type Project struct {
 
 type ProjectRole string
 
+type ProjectChanges struct {
+	Name        *string `json:"name"`
+	Description *string `json:"description"`
+}
+
 const (
 	RoleOwner  ProjectRole = "owner"
 	RoleAdmin  ProjectRole = "admin"

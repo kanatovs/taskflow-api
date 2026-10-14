@@ -92,7 +92,7 @@ func (r *ProjectRepository) ListByUser(ctx context.Context, userID int64, page, 
 	return projects, total, nil
 }
 
-func (r *ProjectRepository) Update(ctx context.Context, input domain.Project, actorID int64) (domain.Project, error) {
+func (r *ProjectRepository) Update(ctx context.Context, id, actorID int64, changes domain.ProjectChanges) (domain.Project, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.timeout)
 	defer cancel()
 	tx, err := r.pool.Begin(ctx)
@@ -100,18 +100,18 @@ func (r *ProjectRepository) Update(ctx context.Context, input domain.Project, ac
 		return domain.Project{}, fmt.Errorf("begin project update: %w", err)
 	}
 	defer rollback(tx)
-	if err := lockProject(ctx, tx, input.ID); err != nil {
+	if err := lockProject(ctx, tx, id); err != nil {
 		return domain.Project{}, err
 	}
-	role, err := memberRole(ctx, tx, input.ID, actorID)
+	role, err := memberRole(ctx, tx, id, actorID)
 	if err != nil {
 		return domain.Project{}, err
 	}
 	if role != domain.RoleOwner && role != domain.RoleAdmin {
 		return domain.Project{}, domain.ErrForbidden
 	}
-	project, err := scanProject(tx.QueryRow(ctx, `UPDATE projects SET name = $2, description = $3, updated_at = CURRENT_TIMESTAMP
-		WHERE id = $1 RETURNING id, name, description, owner_id, created_at, updated_at`, input.ID, input.Name, input.Description))
+	project, err := scanProject(tx.QueryRow(ctx, `UPDATE projects SET name = COALESCE($2, name), description = COALESCE($3, description), updated_at = CURRENT_TIMESTAMP
+		WHERE id = $1 RETURNING id, name, description, owner_id, created_at, updated_at`, id, changes.Name, changes.Description))
 	if err != nil {
 		return domain.Project{}, fmt.Errorf("update project: %w", mapProjectError(err))
 	}
