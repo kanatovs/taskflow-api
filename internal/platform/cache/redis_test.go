@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -31,6 +32,44 @@ func TestRedisUnavailableAndClose(t *testing.T) {
 	}
 	if _, _, err := r.Get(context.Background(), "test"); err == nil {
 		t.Fatal("closed client succeeded")
+	}
+}
+
+func TestRedisContextDeadline(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { listener.Close() })
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		conn, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		// Accept a connection but never answer the Redis handshake.
+		var buffer [4096]byte
+		for {
+			if _, err := conn.Read(buffer[:]); err != nil {
+				return
+			}
+		}
+	}()
+	r := New(config.Redis{Addr: listener.Addr().String(), DialTimeout: 100 * time.Millisecond, OperationTimeout: 50 * time.Millisecond})
+	t.Cleanup(func() { r.Close(); listener.Close(); <-done })
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	if _, _, err := r.Get(ctx, "test"); err == nil {
+		t.Fatal("unresponsive server succeeded")
+	}
+	if time.Since(start) > time.Second {
+		t.Fatal("context deadline did not bound Redis wait")
+	}
+	if !errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		t.Fatal("parent deadline not reached")
 	}
 }
 
@@ -69,5 +108,22 @@ func TestRedisIntegration(t *testing.T) {
 	}
 	if _, hit, err := r.Get(ctx, key); err != nil || hit {
 		t.Fatal("deleted key still present")
+	}
+	if err := r.Set(ctx, key, []byte("expires"), 25*time.Millisecond); err != nil {
+		t.Fatal("set expiring key failed")
+	}
+	deadline := time.Now().Add(time.Second)
+	for {
+		_, hit, err := r.Get(ctx, key)
+		if err != nil {
+			t.Fatal("expiration read failed")
+		}
+		if !hit {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("TTL did not expire")
+		}
+		time.Sleep(5 * time.Millisecond)
 	}
 }

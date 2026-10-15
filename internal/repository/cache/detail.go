@@ -49,6 +49,10 @@ func (r *Project) ByID(ctx context.Context, id int64) (domain.Project, error) {
 		})
 }
 
+func (r *Project) Invalidate(ctx context.Context, id int64) {
+	invalidate(ctx, r.store, ProjectKey(id), r.logger)
+}
+
 type Task struct {
 	source TaskReader
 	store  Store
@@ -68,6 +72,16 @@ func (r *Task) ByID(ctx context.Context, projectID, taskID int64) (domain.Task, 
 				(t.Status == domain.TaskTodo || t.Status == domain.TaskInProgress || t.Status == domain.TaskDone) &&
 				(t.Priority == domain.PriorityLow || t.Priority == domain.PriorityMedium || t.Priority == domain.PriorityHigh)
 		})
+}
+
+func (r *Task) Invalidate(ctx context.Context, projectID, taskID int64) {
+	invalidate(ctx, r.store, TaskKey(projectID, taskID), r.logger)
+}
+
+func invalidate(ctx context.Context, store Store, key string, logger *slog.Logger) {
+	if err := store.Delete(ctx, key); err != nil {
+		logger.WarnContext(ctx, "Redis invalidation failed; stale data is bounded by TTL", "cache_key", key)
+	}
 }
 
 func readThrough[T any](ctx context.Context, store Store, key string, ttl time.Duration, logger *slog.Logger, load func(context.Context) (T, error), valid func(T) bool) (T, error) {
@@ -106,6 +120,10 @@ func readThrough[T any](ctx context.Context, store Store, key string, ttl time.D
 		} else if err := store.Set(ctx, key, encoded, ttl); err != nil {
 			logger.WarnContext(ctx, "Redis write unavailable or timed out", "cache_key", key)
 		}
+	}
+	if err := ctx.Err(); err != nil {
+		var zero T
+		return zero, err
 	}
 	return result, nil
 }

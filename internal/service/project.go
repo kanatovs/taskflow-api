@@ -36,6 +36,7 @@ type ProjectService struct {
 
 type ProjectDetailReader interface {
 	ByID(context.Context, int64) (domain.Project, error)
+	Invalidate(context.Context, int64)
 }
 
 // The optional detail reader is used only after PostgreSQL-backed authorization.
@@ -85,11 +86,10 @@ func (s *ProjectService) Get(ctx context.Context, userID, projectID int64) (doma
 	if err := s.authorizeDetail(ctx, userID, projectID); err != nil {
 		return domain.Project{}, err
 	}
-	reader := ProjectDetailReader(s.projects)
 	if s.details != nil {
-		reader = s.details
+		return s.details.ByID(ctx, projectID)
 	}
-	p, err := reader.ByID(ctx, projectID)
+	p, err := s.projects.ByID(ctx, projectID)
 	if err != nil {
 		return domain.Project{}, fmt.Errorf("find project: %w", err)
 	}
@@ -140,6 +140,9 @@ func (s *ProjectService) Update(ctx context.Context, userID, projectID int64, ch
 	if err != nil {
 		return domain.Project{}, fmt.Errorf("update project: %w", err)
 	}
+	if s.details != nil {
+		s.details.Invalidate(ctx, projectID)
+	}
 	return p, nil
 }
 
@@ -153,6 +156,9 @@ func (s *ProjectService) Delete(ctx context.Context, userID, projectID int64) er
 	}
 	if err := s.projects.Delete(ctx, projectID, userID); err != nil {
 		return fmt.Errorf("delete project: %w", err)
+	}
+	if s.details != nil {
+		s.details.Invalidate(ctx, projectID)
 	}
 	return nil
 }

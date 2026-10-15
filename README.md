@@ -721,8 +721,22 @@ Concurrent misses may duplicate entity reads; there are no distributed locks,
 stampede prevention, list caching or cache warming. PostgreSQL reads remain
 necessary for authentication and authorization even on a hit.
 
-Mutation invalidation and the complete cache smoke suite are the next TF-024
-slice. Until then, detail changes may remain cached for up to the configured TTL.
+Successful project updates/deletes invalidate that project's detail key.
+Successful task updates/deletes invalidate the task detail key, including
+assignment, status, priority and due-date changes. Creation does not invalidate
+detail keys, and comments do not invalidate tasks because task details contain no
+derived comment information. Writes and their permission checks always use the
+PostgreSQL repositories, never cached entities.
+
+Invalidation failures are logged and never roll back a committed PostgreSQL
+mutation or turn it into an HTTP 500. Stale data can survive a failed invalidation
+until its TTL expires. A read already in flight can also refill an old value
+after a concurrent invalidation; this accepted cache-aside race is bounded by the
+TTL of that fill. A successful invalidation removes the existing entry; subsequent
+uncontended reads load the new database value. There are no consistency guarantees
+for cached details beyond this bounded staleness. Authorization remains live in
+PostgreSQL, including when a member is removed or a project is deleted. Task keys
+left by a project cascade become inaccessible and expire without a key scan.
 
 Run `go test ./...` for unit tests. For the Redis client integration test, publish
 an isolated disposable Redis on loopback (the normal Compose service has no host
@@ -730,3 +744,18 @@ port), set `TEST_REDIS_ADDR=127.0.0.1:<port>`, and run
 `go test -count=1 ./internal/platform/cache`. It only deletes its own unique test
 key and never flushes a database. PostgreSQL integration tests continue to use
 `TEST_POSTGRES_URL` and unique disposable databases as documented above.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ./scripts/cache-smoke.ps1
+```
+
+This script creates a random isolated Compose project with PostgreSQL on 15440,
+Redis on 16380 and the API on 18084, all on loopback (override with `-PostgresPort`,
+`-RedisPort`, `-ApiPort`). `scripts/compose.cache-test.yaml` publishes Redis only
+for this test environment. The script runs migrations twice, the complete Go
+suite with real PostgreSQL/Redis, and project/task cache HTTP smoke checks. It
+verifies hit/miss, TTL, JSON safety, permissions, removed members, malformed
+values, invalidation, deletion, uncached lists/search, fallback, writes and
+authentication during an outage, API startup with Redis down, recovery, disabled
+caching and graceful shutdown. It never flushes Redis and removes only its own
+containers/volume, restoring environment variables in `finally`.

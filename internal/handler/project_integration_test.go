@@ -16,6 +16,7 @@ import (
 	"github.com/kanatovs/taskflow-api/internal/domain"
 	"github.com/kanatovs/taskflow-api/internal/handler"
 	"github.com/kanatovs/taskflow-api/internal/platform/token"
+	repositorycache "github.com/kanatovs/taskflow-api/internal/repository/cache"
 	"github.com/kanatovs/taskflow-api/internal/repository/postgres"
 	"github.com/kanatovs/taskflow-api/internal/service"
 	"github.com/kanatovs/taskflow-api/internal/testutil"
@@ -29,7 +30,7 @@ type projectHTTP struct {
 	logs   *lockedLogBuffer
 }
 
-func newProjectHTTP(t *testing.T) *projectHTTP {
+func newProjectHTTP(t *testing.T, stores ...repositorycache.Store) *projectHTTP {
 	t.Helper()
 	pool := testutil.Postgres(t)
 	users := postgres.NewUserRepository(pool, time.Second)
@@ -52,10 +53,17 @@ func newProjectHTTP(t *testing.T) *projectHTTP {
 	}
 	projects := postgres.NewProjectRepository(pool, time.Second)
 	members := postgres.NewProjectMemberRepository(pool, time.Second)
-	projectService := service.NewProjectService(projects, members, users)
 	tasks := postgres.NewTaskRepository(pool, time.Second)
+	var projectDetails service.ProjectDetailReader
+	var taskDetails service.TaskDetailReader
+	if len(stores) > 0 {
+		logger := slog.New(slog.NewJSONHandler(f.logs, nil))
+		projectDetails = repositorycache.NewProject(projects, stores[0], time.Minute, logger)
+		taskDetails = repositorycache.NewTask(tasks, stores[0], time.Minute, logger)
+	}
+	projectService := service.NewProjectService(projects, members, users, projectDetails)
 	comments := handler.NewCommentHandler(service.NewCommentService(projectService, tasks, postgres.NewCommentRepository(pool, time.Second)))
-	router := handler.NewRouter(slog.New(slog.NewJSONHandler(f.logs, nil)), handler.NewReadiness(pool, time.Second), handler.NewAuthHandler(service.NewAuthService(users, issuer), issuer), handler.NewProjectHandler(projectService, service.NewProjectMemberService(projectService, members)), handler.NewTaskHandler(service.NewTaskService(projectService, tasks), comments))
+	router := handler.NewRouter(slog.New(slog.NewJSONHandler(f.logs, nil)), handler.NewReadiness(pool, time.Second), handler.NewAuthHandler(service.NewAuthService(users, issuer), issuer), handler.NewProjectHandler(projectService, service.NewProjectMemberService(projectService, members)), handler.NewTaskHandler(service.NewTaskService(projectService, tasks, taskDetails), comments))
 	f.server = httptest.NewServer(router)
 	f.server.Client().Timeout = 5 * time.Second
 	t.Cleanup(f.server.Close)

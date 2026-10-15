@@ -28,6 +28,7 @@ type TaskService struct {
 
 type TaskDetailReader interface {
 	ByID(context.Context, int64, int64) (domain.Task, error)
+	Invalidate(context.Context, int64, int64)
 }
 
 func NewTaskService(projects *ProjectService, tasks TaskRepository, details ...TaskDetailReader) *TaskService {
@@ -84,11 +85,10 @@ func (s *TaskService) Get(ctx context.Context, actorID, projectID, taskID int64)
 	if err := validateTaskID(taskID); err != nil {
 		return domain.Task{}, err
 	}
-	reader := TaskDetailReader(s.tasks)
 	if s.details != nil {
-		reader = s.details
+		return s.details.ByID(ctx, projectID, taskID)
 	}
-	task, err := reader.ByID(ctx, projectID, taskID)
+	task, err := s.tasks.ByID(ctx, projectID, taskID)
 	if err != nil {
 		return domain.Task{}, fmt.Errorf("get task: %w", err)
 	}
@@ -180,6 +180,9 @@ func (s *TaskService) Update(ctx context.Context, actorID, projectID, taskID int
 	if err != nil {
 		return domain.Task{}, fmt.Errorf("update task: %w", err)
 	}
+	if s.details != nil {
+		s.details.Invalidate(ctx, projectID, taskID)
+	}
 	return task, nil
 }
 
@@ -200,6 +203,9 @@ func (s *TaskService) Delete(ctx context.Context, actorID, projectID, taskID int
 	}
 	if err := s.tasks.Delete(ctx, projectID, taskID, actorID); err != nil {
 		return fmt.Errorf("delete task: %w", err)
+	}
+	if s.details != nil {
+		s.details.Invalidate(ctx, projectID, taskID)
 	}
 	return nil
 }

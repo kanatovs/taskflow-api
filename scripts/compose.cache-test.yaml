@@ -1,0 +1,5 @@
+# Publish Redis only for isolated local integration tests.
+services:
+  redis:
+    ports:
+      - "127.0.0.1:${REDIS_TEST_PORT:-16379}:6379"
