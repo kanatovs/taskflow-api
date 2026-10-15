@@ -15,7 +15,7 @@ import (
 type TaskRepository interface {
 	Create(context.Context, domain.Task) (domain.Task, error)
 	ByID(context.Context, int64, int64) (domain.Task, error)
-	List(context.Context, int64, int, int) ([]domain.Task, int, error)
+	List(context.Context, int64, domain.TaskQuery) ([]domain.Task, int, error)
 	Update(context.Context, int64, int64, int64, domain.TaskChanges) (domain.Task, error)
 	Delete(context.Context, int64, int64, int64) error
 }
@@ -82,18 +82,57 @@ func (s *TaskService) Get(ctx context.Context, actorID, projectID, taskID int64)
 	return task, nil
 }
 
-func (s *TaskService) List(ctx context.Context, actorID, projectID int64, page, size int) ([]domain.Task, int, error) {
+func (s *TaskService) List(ctx context.Context, actorID, projectID int64, query domain.TaskQuery) ([]domain.Task, int, error) {
 	if _, _, err := s.projects.access(ctx, actorID, projectID); err != nil {
 		return nil, 0, err
 	}
-	if err := validatePage(page, size); err != nil {
+	if err := validateTaskQuery(query); err != nil {
 		return nil, 0, err
 	}
-	tasks, total, err := s.tasks.List(ctx, projectID, page, size)
+	query.Search = strings.TrimSpace(query.Search)
+	query.DueFrom, query.DueTo = utcTime(query.DueFrom), utcTime(query.DueTo)
+	tasks, total, err := s.tasks.List(ctx, projectID, query)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list tasks: %w", err)
 	}
 	return tasks, total, nil
+}
+
+func validateTaskQuery(q domain.TaskQuery) error {
+	if err := validatePage(q.Page, q.PageSize); err != nil {
+		return err
+	}
+	fields := map[string]string{}
+	if q.Status != "" && q.Status != domain.TaskTodo && q.Status != domain.TaskInProgress && q.Status != domain.TaskDone {
+		fields["status"] = "must be todo, in_progress, or done"
+	}
+	if q.Priority != "" && q.Priority != domain.PriorityLow && q.Priority != domain.PriorityMedium && q.Priority != domain.PriorityHigh {
+		fields["priority"] = "must be low, medium, or high"
+	}
+	if q.AssigneeID != nil && *q.AssigneeID <= 0 {
+		fields["assignee_id"] = "must be a positive integer"
+	}
+	if q.CreatorID != nil && *q.CreatorID <= 0 {
+		fields["creator_id"] = "must be a positive integer"
+	}
+	if q.DueFrom != nil && q.DueTo != nil && q.DueFrom.After(*q.DueTo) {
+		fields["due_from"] = "must not be after due_to"
+	}
+	if !utf8.ValidString(q.Search) || utf8.RuneCountInString(q.Search) > 200 || strings.IndexFunc(q.Search, unicode.IsControl) >= 0 {
+		fields["search"] = "must contain at most 200 characters without control characters"
+	}
+	switch q.Sort {
+	case "id", "created_at", "updated_at", "due_date", "priority", "status", "title":
+	default:
+		fields["sort"] = "must be id, created_at, updated_at, due_date, priority, status, or title"
+	}
+	if q.Order != "asc" && q.Order != "desc" {
+		fields["order"] = "must be asc or desc"
+	}
+	if len(fields) > 0 {
+		return &domain.ValidationError{Fields: fields}
+	}
+	return nil
 }
 
 func (s *TaskService) Update(ctx context.Context, actorID, projectID, taskID int64, changes domain.TaskChanges) (domain.Task, error) {

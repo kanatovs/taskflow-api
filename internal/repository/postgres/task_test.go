@@ -44,11 +44,13 @@ func TestTaskRepositoryIntegration(t *testing.T) {
 	if err != nil || updated.DueDate != nil || updated.AssigneeID != nil || updated.Title != title {
 		t.Fatalf("null patch: %+v %v", updated, err)
 	}
-	tasks, total, err := repo.List(ctx, project.ID, 1, 20)
+	query := domain.TaskQuery{Page: 1, PageSize: 20, Sort: "id", Order: "asc"}
+	tasks, total, err := repo.List(ctx, project.ID, query)
 	if err != nil || len(tasks) != 1 || total != 1 {
 		t.Fatalf("list: %v", err)
 	}
-	tasks, total, err = repo.List(ctx, project.ID, 2, 20)
+	query.Page = 2
+	tasks, total, err = repo.List(ctx, project.ID, query)
 	if err != nil || tasks == nil || len(tasks) != 0 || total != 1 {
 		t.Fatal("empty page lost total")
 	}

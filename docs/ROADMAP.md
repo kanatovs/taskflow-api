@@ -137,7 +137,7 @@ Branch: `feature/task-management`
   - `DELETE /api/v1/projects/{projectID}/tasks/{taskID}/comments/{commentID}`
   Commit: `feat(comments): implement task comments`
 
-- [ ] TF-021 — Add filtering, search, sorting, and pagination.
+- [x] TF-021 — Add filtering, search, sorting, and pagination.
   Filters: status, priority, assignee, creator, due date, text search.
   Commit: `feat(tasks): add filtering search and pagination`
 

@@ -12,7 +12,7 @@ import (
 type TaskService interface {
 	Create(context.Context, int64, int64, service.CreateTaskInput) (domain.Task, error)
 	Get(context.Context, int64, int64, int64) (domain.Task, error)
-	List(context.Context, int64, int64, int, int) ([]domain.Task, int, error)
+	List(context.Context, int64, int64, domain.TaskQuery) ([]domain.Task, int, error)
 	Update(context.Context, int64, int64, int64, domain.TaskChanges) (domain.Task, error)
 	Delete(context.Context, int64, int64, int64) error
 }
@@ -51,16 +51,16 @@ func (h *TaskHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r = withTaskLogger(r, project, 0)
-	page, size, ok := parsePage(w, r)
+	query, ok := parseTaskQuery(w, r)
 	if !ok {
 		return
 	}
-	tasks, total, err := h.service.List(r.Context(), actor, project, page, size)
+	tasks, total, err := h.service.List(r.Context(), actor, project, query)
 	if err != nil {
 		writeServiceError(w, r, "list tasks", err)
 		return
 	}
-	writeCollection(w, r, tasks, page, size, total)
+	writeCollection(w, r, tasks, query.Page, query.PageSize, total)
 }
 
 func (h *TaskHandler) Get(w http.ResponseWriter, r *http.Request) {

@@ -601,6 +601,22 @@ unknown fields, invalid IDs, enum values, timestamps, and oversized bodies are
 rejected. Dates are returned in UTC. Collections use `page`/`page_size`
 (default 1/20, maximum size 100), stable ID order, and total metadata.
 Task lookup and mutation always use both project and task IDs.
+
+Task listing accepts any combination of `status`, `priority`, `assignee_id`,
+`creator_id`, `due_from`, `due_to`, and `search`. Due-date bounds are inclusive
+RFC3339 timestamps; tasks without a due date do not match a date bound. Search
+is a case-insensitive literal substring of title or description (up to 200
+characters); `%` and `_` are ordinary characters. URL-encode query values.
+
+`sort` accepts `id` (default), `created_at`, `updated_at`, `due_date`, `priority`,
+`status`, or `title`; `order` is `asc` (default) or `desc`. Priority sorts
+low/medium/high and status sorts todo/in_progress/done. Null dates always sort
+last. ID in the same direction breaks ties. Repeated/unknown parameters,
+invalid values, and reversed date ranges return 400. Count and page share one
+PostgreSQL snapshot; the total is retained even for an empty page. Offset
+pagination is deterministic for unchanged data; separate requests can observe
+concurrent changes. Search scans the selected project's text without a full-text
+index; no new search service or dependency is introduced.
 All current members may create and read tasks. Owners/admins and the task creator
 may edit, assign, or delete a task. The current assignee may update only `status`;
 other members may not mutate it. Every new task starts in `todo`.

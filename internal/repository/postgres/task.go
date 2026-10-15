@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -60,19 +61,26 @@ func (r *TaskRepository) ByID(ctx context.Context, projectID, taskID int64) (dom
 	return task, nil
 }
 
-func (r *TaskRepository) List(ctx context.Context, projectID int64, page, size int) ([]domain.Task, int, error) {
+func (r *TaskRepository) List(ctx context.Context, projectID int64, query domain.TaskQuery) ([]domain.Task, int, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.timeout)
 	defer cancel()
+	where, args := taskConditions(projectID, query)
+	order, err := taskOrder(query.Sort, query.Order)
+	if err != nil {
+		return nil, 0, err
+	}
 	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
 	if err != nil {
 		return nil, 0, fmt.Errorf("begin task listing: %w", err)
 	}
 	defer rollback(tx)
 	var total int
-	if err := tx.QueryRow(ctx, `SELECT count(*) FROM tasks WHERE project_id=$1`, projectID).Scan(&total); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM tasks WHERE `+where, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count tasks: %w", err)
 	}
-	rows, err := tx.Query(ctx, `SELECT `+taskColumns+` FROM tasks WHERE project_id=$1 ORDER BY id LIMIT $2 OFFSET $3`, projectID, size, int64(page-1)*int64(size))
+	args = append(args, query.PageSize, int64(query.Page-1)*int64(query.PageSize))
+	pageSQL := fmt.Sprintf(" LIMIT $%d OFFSET $%d", len(args)-1, len(args))
+	rows, err := tx.Query(ctx, `SELECT `+taskColumns+` FROM tasks WHERE `+where+` ORDER BY `+order+pageSQL, args...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list tasks: %w", err)
 	}
@@ -92,6 +100,56 @@ func (r *TaskRepository) List(ctx context.Context, projectID int64, page, size i
 		return nil, 0, fmt.Errorf("commit task listing: %w", err)
 	}
 	return tasks, total, nil
+}
+
+func taskConditions(projectID int64, q domain.TaskQuery) (string, []any) {
+	conditions := []string{"project_id=$1"}
+	args := []any{projectID}
+	add := func(expression string, value any) {
+		args = append(args, value)
+		conditions = append(conditions, fmt.Sprintf(expression, len(args)))
+	}
+	if q.Status != "" {
+		add("status=$%d", q.Status)
+	}
+	if q.Priority != "" {
+		add("priority=$%d", q.Priority)
+	}
+	if q.AssigneeID != nil {
+		add("assignee_id=$%d", *q.AssigneeID)
+	}
+	if q.CreatorID != nil {
+		add("creator_id=$%d", *q.CreatorID)
+	}
+	if q.DueFrom != nil {
+		add("due_date >= $%d", *q.DueFrom)
+	}
+	if q.DueTo != nil {
+		add("due_date <= $%d", *q.DueTo)
+	}
+	if q.Search != "" {
+		// strpos treats %, _, quotes, and backslashes as literal text.
+		add("strpos(lower(title || ' ' || description), lower($%d)) > 0", q.Search)
+	}
+	return strings.Join(conditions, " AND "), args
+}
+
+func taskOrder(sort, direction string) (string, error) {
+	// Only these SQL expressions may be interpolated; user values stay parameters.
+	expressions := map[string]string{
+		"id": "id", "created_at": "created_at", "updated_at": "updated_at", "due_date": "due_date", "title": "title",
+		"priority": "CASE priority WHEN 'low' THEN 1 WHEN 'medium' THEN 2 WHEN 'high' THEN 3 END",
+		"status":   "CASE status WHEN 'todo' THEN 1 WHEN 'in_progress' THEN 2 WHEN 'done' THEN 3 END",
+	}
+	expression, ok := expressions[sort]
+	if !ok || (direction != "asc" && direction != "desc") {
+		return "", &domain.ValidationError{Fields: map[string]string{"sort": "unsupported sort or order"}}
+	}
+	order := expression + " " + direction + " NULLS LAST"
+	if sort != "id" {
+		order += ", id " + direction
+	}
+	return order, nil
 }
 
 func (r *TaskRepository) Update(ctx context.Context, projectID, taskID, actorID int64, changes domain.TaskChanges) (domain.Task, error) {

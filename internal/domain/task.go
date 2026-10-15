@@ -51,6 +51,20 @@ type TaskChanges struct {
 	DueDate     Nullable[time.Time] `json:"due_date"`
 }
 
+type TaskQuery struct {
+	Page       int
+	PageSize   int
+	Status     TaskStatus
+	Priority   TaskPriority
+	AssigneeID *int64
+	CreatorID  *int64
+	DueFrom    *time.Time
+	DueTo      *time.Time
+	Search     string
+	Sort       string
+	Order      string
+}
+
 func CanManageTask(role ProjectRole, actorID int64, task Task) bool {
 	return role == RoleOwner || role == RoleAdmin || task.CreatorID == actorID
 }
