@@ -23,10 +23,19 @@ type TaskRepository interface {
 type TaskService struct {
 	projects *ProjectService
 	tasks    TaskRepository
+	details  TaskDetailReader
 }
 
-func NewTaskService(projects *ProjectService, tasks TaskRepository) *TaskService {
-	return &TaskService{projects: projects, tasks: tasks}
+type TaskDetailReader interface {
+	ByID(context.Context, int64, int64) (domain.Task, error)
+}
+
+func NewTaskService(projects *ProjectService, tasks TaskRepository, details ...TaskDetailReader) *TaskService {
+	s := &TaskService{projects: projects, tasks: tasks}
+	if len(details) > 0 {
+		s.details = details[0]
+	}
+	return s
 }
 
 type CreateTaskInput struct {
@@ -69,13 +78,17 @@ func (s *TaskService) Create(ctx context.Context, actorID, projectID int64, inpu
 }
 
 func (s *TaskService) Get(ctx context.Context, actorID, projectID, taskID int64) (domain.Task, error) {
-	if _, _, err := s.projects.access(ctx, actorID, projectID); err != nil {
+	if err := s.projects.authorizeDetail(ctx, actorID, projectID); err != nil {
 		return domain.Task{}, err
 	}
 	if err := validateTaskID(taskID); err != nil {
 		return domain.Task{}, err
 	}
-	task, err := s.tasks.ByID(ctx, projectID, taskID)
+	reader := TaskDetailReader(s.tasks)
+	if s.details != nil {
+		reader = s.details
+	}
+	task, err := reader.ByID(ctx, projectID, taskID)
 	if err != nil {
 		return domain.Task{}, fmt.Errorf("get task: %w", err)
 	}

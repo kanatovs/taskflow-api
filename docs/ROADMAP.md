@@ -155,7 +155,7 @@ Acceptance:
 
 Branch: `feature/redis-cache`
 
-- [ ] TF-023 — Add Redis configuration, lifecycle, and read-through caching.
+- [x] TF-023 — Add Redis configuration, lifecycle, and read-through caching.
   Commit: `feat(cache): add Redis read-through caching`
 
 - [ ] TF-024 — Add invalidation, failure fallback, and cache tests.

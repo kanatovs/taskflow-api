@@ -675,3 +675,58 @@ schema, registration/login, all new HTTP routes, permissions, nullable fields,
 combined filters, stable pages, cross-project/task rejection, logs, and graceful
 shutdown. It removes only its own containers and volume in `finally`, and
 restores process environment variables. It never rolls back the development DB.
+
+## Optional Redis detail cache
+
+PostgreSQL is authoritative. Redis only accelerates single project and task
+detail GET requests. Lists, filters, search, comments, memberships, users, password
+hashes, tokens, HTTP envelopes, errors and authorization decisions are not cached.
+
+Each detail request verifies the JWT, then reads the current user and membership
+from PostgreSQL before accessing Redis. A cache hit avoids the entity SELECT;
+authorization still uses PostgreSQL. On a miss, the detail repository reads
+PostgreSQL and stores the successful domain entity as JSON with an explicit TTL.
+Centralized keys are `taskflow:v1:project:{projectID}` and
+`taskflow:v1:project:{projectID}:task:{taskID}`. Task keys include both IDs and
+decoded identities are checked, preventing cross-project cache reuse.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `REDIS_ADDR` | empty on host; `redis:6379` in Compose | Host:port; empty disables caching |
+| `REDIS_PASSWORD` | empty | Optional client password; provision server authentication separately |
+| `REDIS_DB` | `0` | Standalone database number, 0 through 15 |
+| `CACHE_TTL` | `1m` | Positive TTL, at least 1ms |
+| `REDIS_DIAL_TIMEOUT` | `200ms` | Connection timeout, at least 1ms |
+| `REDIS_OPERATION_TIMEOUT` | `100ms` | Per-operation context/socket/pool timeout, at least 1ms |
+
+```powershell
+docker compose up -d --wait postgres redis
+docker compose run --rm migrate up
+docker compose up -d --build --wait api
+```
+
+The pinned Redis container has a healthcheck, a 128MB eviction limit, no published
+port and no persistent volume or persistence files. Its data is disposable: Redis
+can be restarted, removed or recreated safely. `docker compose up -d --force-recreate
+redis` clears this cache without changing PostgreSQL. Never remove the PostgreSQL
+volume as a cache repair step. Redis is not a readiness dependency: `/ready` only
+checks PostgreSQL. A lazy client permits startup during Redis downtime and closes
+after HTTP shutdown.
+
+Redis timeouts, connection failures, malformed JSON or mismatched entity IDs
+produce safe warnings and fall back to PostgreSQL. Malformed entries are deleted
+when possible. Warnings exclude raw errors, cached payloads and credentials.
+Only successful entity reads populate the cache; negative results are not cached.
+Concurrent misses may duplicate entity reads; there are no distributed locks,
+stampede prevention, list caching or cache warming. PostgreSQL reads remain
+necessary for authentication and authorization even on a hit.
+
+Mutation invalidation and the complete cache smoke suite are the next TF-024
+slice. Until then, detail changes may remain cached for up to the configured TTL.
+
+Run `go test ./...` for unit tests. For the Redis client integration test, publish
+an isolated disposable Redis on loopback (the normal Compose service has no host
+port), set `TEST_REDIS_ADDR=127.0.0.1:<port>`, and run
+`go test -count=1 ./internal/platform/cache`. It only deletes its own unique test
+key and never flushes a database. PostgreSQL integration tests continue to use
+`TEST_POSTGRES_URL` and unique disposable databases as documented above.
