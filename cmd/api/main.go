@@ -50,7 +50,9 @@ func run() int {
 	projectService := service.NewProjectService(projects, members, users)
 	projectHandler := handler.NewProjectHandler(projectService, service.NewProjectMemberService(projectService, members))
 	tasks := postgres.NewTaskRepository(pool, cfg.DatabaseTimeout)
-	taskHandler := handler.NewTaskHandler(service.NewTaskService(projectService, tasks))
+	comments := postgres.NewCommentRepository(pool, cfg.DatabaseTimeout)
+	commentHandler := handler.NewCommentHandler(service.NewCommentService(projectService, tasks, comments))
+	taskHandler := handler.NewTaskHandler(service.NewTaskService(projectService, tasks), commentHandler)
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,

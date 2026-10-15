@@ -33,6 +33,7 @@ Development follows small, reviewable roadmap tasks. The repository-level
 - Project membership management using existing user IDs, with protected owner roles.
 - Protected project-scoped task CRUD with nullable assignment/due dates,
   database constraints, and integration tests.
+- Task comments with author/owner/admin editing permissions.
 - User registration with bcrypt, login with JWT, and authenticated current-user
   lookup at `GET /api/v1/users/me`.
 - Public `GET /health` endpoint returning `200 OK` and JSON:
@@ -612,3 +613,20 @@ creator/assignee IDs but immediately removes access; a manager can clear or
 replace the assignment. Permissions, assignment, and transitions are checked
 again inside the write transaction under the same project lock used by member
 changes, so a stale service check cannot authorize a write.
+
+## Task comments
+
+Current project members may create and list comments:
+
+- `POST /api/v1/projects/{projectID}/tasks/{taskID}/comments` (201).
+- `GET /api/v1/projects/{projectID}/tasks/{taskID}/comments` (200).
+- `PATCH /api/v1/projects/{projectID}/tasks/{taskID}/comments/{commentID}` (200).
+- `DELETE /api/v1/projects/{projectID}/tasks/{taskID}/comments/{commentID}` (204).
+
+Create and PATCH accept only `body`, trimmed to 1–2000 characters. The server
+sets the author. Only the comment author or a current project owner/admin may
+edit or delete it. Task creation/assignment does not grant moderation rights.
+Collections use the same page defaults and stable ID order as tasks. Mixed
+project/task/comment IDs return 404 after the project membership check.
+Deleting a task or project cascades to its comments. Member removal preserves
+authorship, but a removed author cannot read or mutate comments.

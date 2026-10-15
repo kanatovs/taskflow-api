@@ -129,7 +129,7 @@ Branch: `feature/task-management`
 - [x] TF-019 — Add assignment rules, status transitions, and authorization.
   Commit: `feat(tasks): add assignment and authorization rules`
 
-- [ ] TF-020 — Add task comments.
+- [x] TF-020 — Add task comments.
   Endpoints:
   - `POST /api/v1/projects/{projectID}/tasks/{taskID}/comments`
   - `GET /api/v1/projects/{projectID}/tasks/{taskID}/comments`

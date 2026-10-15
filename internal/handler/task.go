@@ -17,9 +17,14 @@ type TaskService interface {
 	Delete(context.Context, int64, int64, int64) error
 }
 
-type TaskHandler struct{ service TaskService }
+type TaskHandler struct {
+	service  TaskService
+	comments *CommentHandler
+}
 
-func NewTaskHandler(service TaskService) *TaskHandler { return &TaskHandler{service: service} }
+func NewTaskHandler(service TaskService, comments *CommentHandler) *TaskHandler {
+	return &TaskHandler{service: service, comments: comments}
+}
 
 func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 	actor, project, _, ok := taskRequestIDs(w, r, false)

@@ -34,6 +34,12 @@ func NewRouter(logger *slog.Logger, readiness *Readiness, auth *AuthHandler, pro
 				r.Get("/{taskID}", tasks.Get)
 				r.Patch("/{taskID}", tasks.Update)
 				r.Delete("/{taskID}", tasks.Delete)
+				if tasks.comments != nil {
+					r.Post("/{taskID}/comments", tasks.comments.Create)
+					r.Get("/{taskID}/comments", tasks.comments.List)
+					r.Patch("/{taskID}/comments/{commentID}", tasks.comments.Update)
+					r.Delete("/{taskID}/comments/{commentID}", tasks.comments.Delete)
+				}
 			})
 		}
 		if projects != nil {
