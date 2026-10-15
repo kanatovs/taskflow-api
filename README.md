@@ -1,5 +1,7 @@
 # TaskFlow API
 
+[![CI](https://github.com/kanatovs/taskflow-api/actions/workflows/ci.yml/badge.svg)](https://github.com/kanatovs/taskflow-api/actions/workflows/ci.yml)
+
 A Go backend service for collaborative project and task management.
 
 > Status: early development. Features are added incrementally according to

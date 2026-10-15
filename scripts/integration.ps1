@@ -16,6 +16,9 @@ $settings = @{
     TEST_REDIS_ADDR = "127.0.0.1:$RedisPort"
 }
 $previousSettings = @{}
+if ($env:GITHUB_OUTPUT) {
+    Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "compose_project=$testProject"
+}
 
 function Invoke-Compose([string[]]$Arguments) {
     & docker compose @composeArguments @Arguments
@@ -72,7 +75,8 @@ try {
     Invoke-Compose @('run', '--rm', 'migrate', 'up')
     Write-Output 'Migrations: clean 0 -> 4 -> 0 -> 4, repeated up and dirty-state rejection passed'
 
-    & go test -count=1 ./...
+    # Avoid competing database-heavy packages on small local/CI runners.
+    & go test -p 1 -count=1 ./...
     if ($LASTEXITCODE -ne 0) { throw 'Uncached Go unit/PostgreSQL/Redis integration suite failed' }
     Write-Output 'Uncached integration suite passed against isolated PostgreSQL and Redis'
 } finally {

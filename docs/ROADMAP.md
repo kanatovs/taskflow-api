@@ -183,7 +183,7 @@ Branches as appropriate:
 - [x] TF-026 — Add PostgreSQL and Redis integration tests.
   Commit: `test(integration): cover persistence and cache`
 
-- [ ] TF-027 — Add GitHub Actions for formatting, vetting, tests, and build.
+- [x] TF-027 — Add GitHub Actions for formatting, vetting, tests, and build.
   Commit: `ci: add automated Go checks`
 
 - [ ] TF-028 — Complete README, setup, architecture, ER diagram, and examples.

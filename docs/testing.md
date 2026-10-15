@@ -33,7 +33,9 @@ and rejection of a simulated `dirty=true` version. Because the schema itself is
 unchanged by the simulation, `force 4` safely resets this test database's metadata.
 **Never copy that recovery step into a real database without checking its schema.**
 
-Next, `go test -count=1 ./...` exercises real PostgreSQL and Redis. PostgreSQL
+Next, `go test -p 1 -count=1 ./...` exercises real PostgreSQL and Redis. Packages
+run sequentially to reduce database/CPU contention on small CI runners; tests
+remain independent of execution order. PostgreSQL
 fixtures create random `taskflow_test_*` databases and drop only those databases.
 The Go helper applies the SQL files directly; CLI migration metadata is covered
 separately by the runner. Redis tests delete only fixture-owned keys and never
@@ -58,6 +60,23 @@ selected. Failed native commands throw, including failed cleanup.
 | Cache HTTP | `internal/handler/cache_integration_test.go` | Real cache, malformed payload, invalidation, removed members, no Redis access before authorization, real closed-client fallback with PostgreSQL |
 | Cache policy | `internal/repository/cache/*_test.go` | Entity-read counts on miss/hit, no negative cache, safe logs, cancellation, invalidation failure |
 | Container outage | `scripts/cache-smoke.ps1` | Stop real Redis, read/write/login fallback, API startup during outage, recovery, disabled cache |
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on pull requests and pushes to `main`. One Ubuntu
+job uses PowerShell 7 to run the same Go checks and isolated integration runner
+as local development, validates Compose and OpenAPI, and cleans up even after a
+failed integration step. Permissions are limited to reading repository contents;
+superseded runs are cancelled. It does not publish artifacts or deploy anything.
+
+The reusable Go check does not format files in place:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/check-go.ps1
+go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/ci.yml
+```
+
+GitHub-hosted CI has not run until this branch is pushed and a PR is opened.
 
 ## Container smoke tests
 
