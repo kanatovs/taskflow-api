@@ -7,8 +7,14 @@ It demonstrates explicit business rules, parameterized SQL, transactions,
 JWT authentication, and optional Redis caching without an ORM or microservices.
 The repository contains the backend only.
 
-Core functionality is complete. The final documentation and release tasks are
-tracked in [the roadmap](docs/ROADMAP.md); release preparation is in progress.
+Version **1.0.0** is prepared for release. TF-001 through TF-030 are complete in
+[the roadmap](docs/ROADMAP.md). Tagging and publishing follow PR merge into `main`.
+
+- [OpenAPI contract](docs/openapi.yaml)
+- [Architecture and diagrams](docs/architecture.md)
+- [Testing guide](docs/testing.md) and [CI workflow](.github/workflows/ci.yml)
+- [Security and reliability review](docs/release-readiness.md)
+- [Changelog](CHANGELOG.md) and [v1.0.0 release notes](docs/releases/v1.0.0.md)
 
 ## Capabilities and stack
 

@@ -76,7 +76,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/check-go.ps1
 go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/ci.yml
 ```
 
-GitHub-hosted CI has not run until this branch is pushed and a PR is opened.
+Hosted workflow results become available after a push and PR; local checks do
+not establish that the hosted workflow has already passed.
 
 ## Container smoke tests
 
@@ -91,5 +92,6 @@ powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/cache-smoke.ps1
 
 These use loopback ports documented in each script's `param` block. The cache
 smoke script also runs the uncached complete Go suite with real dependencies.
+Both database-heavy runners use `-p 1` to reduce package contention.
 Never point integration variables at personal or production services, run
 `FLUSHDB`, or remove the development PostgreSQL volume as a test cleanup step.

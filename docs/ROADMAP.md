@@ -192,7 +192,7 @@ Branches as appropriate:
 - [x] TF-029 — Perform final security, reliability, and dependency review.
   Commit: `refactor: complete release readiness review`
 
-- [ ] TF-030 — Prepare the first stable release.
+- [x] TF-030 — Prepare the first stable release.
   Commit: `chore: prepare v1 release`
 
 Final acceptance:

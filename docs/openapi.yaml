@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: TaskFlow API
-  version: 0.1.0
+  version: 1.0.0
   description: REST API for collaborative project and task management. JSON success responses use data;
     collections also use meta; errors use error. Body size is limited to 4096 bytes. Length constraints
     apply after documented trimming; byte limits are described separately. Ordinary JSON string fields

@@ -77,7 +77,7 @@ try {
     Invoke-Compose @('up', '-d', '--wait', 'postgres', 'redis')
     Invoke-Compose @('run', '--rm', 'migrate', 'up')
     Invoke-Compose @('run', '--rm', 'migrate', 'up')
-    & go test -count=1 ./...
+    & go test -p 1 -count=1 ./...
     if ($LASTEXITCODE -ne 0) { throw 'Go unit/PostgreSQL/Redis integration tests failed' }
     Write-Output 'Full Go suite with isolated PostgreSQL and Redis: passed'
     Invoke-Compose @('up', '-d', '--build', '--wait', 'api')
