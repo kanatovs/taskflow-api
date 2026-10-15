@@ -180,7 +180,7 @@ Branches as appropriate:
   File: `docs/openapi.yaml`
   Commit: `docs(api): add OpenAPI specification`
 
-- [ ] TF-026 — Add PostgreSQL and Redis integration tests.
+- [x] TF-026 — Add PostgreSQL and Redis integration tests.
   Commit: `test(integration): cover persistence and cache`
 
 - [ ] TF-027 — Add GitHub Actions for formatting, vetting, tests, and build.

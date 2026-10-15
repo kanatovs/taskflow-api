@@ -662,6 +662,17 @@ authorship, but a removed author cannot read or mutate comments.
 
 ## Task and comment verification
 
+For the final isolated integration suite (clean migration up/down/up, dirty
+migration detection, and uncached Go tests with PostgreSQL and Redis), run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ./scripts/integration.ps1
+```
+
+It creates a random Compose project on ports 15441/16381, restores environment
+variables, and removes only its own containers and volume. The dirty-state
+simulation and `force 4` recovery run exclusively in that disposable database.
+
 Run all Go tests against a separate local PostgreSQL instance:
 
 ```powershell

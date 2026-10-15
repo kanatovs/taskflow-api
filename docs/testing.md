@@ -1,0 +1,76 @@
+# Testing TaskFlow
+
+## Unit tests
+
+From the repository root:
+
+```powershell
+go test ./...
+go vet ./...
+go build ./...
+```
+
+Without `TEST_POSTGRES_URL` / `TEST_REDIS_ADDR`, tests requiring those services
+explicitly skip. A green unit-only run does not prove integration coverage.
+
+## Isolated integration run
+
+Requires Go, Docker with Linux containers, and Windows PowerShell 5.1 or newer:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/integration.ps1
+```
+
+The runner creates a random `taskflow-integration-<hex>` Compose project. It
+publishes PostgreSQL on loopback port 15441 and Redis on 16381. Override occupied
+ports with `-PostgresPort 15442 -RedisPort 16382`. Only public example credentials
+are used. No `.env` is read: `.env.example` and explicit process overrides supply
+the test configuration. Previous process environment values are restored.
+
+The runner verifies the actual golang-migrate CLI against an empty disposable
+database: up to clean version 4, repeated up, all four down migrations, up again,
+and rejection of a simulated `dirty=true` version. Because the schema itself is
+unchanged by the simulation, `force 4` safely resets this test database's metadata.
+**Never copy that recovery step into a real database without checking its schema.**
+
+Next, `go test -count=1 ./...` exercises real PostgreSQL and Redis. PostgreSQL
+fixtures create random `taskflow_test_*` databases and drop only those databases.
+The Go helper applies the SQL files directly; CLI migration metadata is covered
+separately by the runner. Redis tests delete only fixture-owned keys and never
+flush a database. Shared integration fixtures do not use `t.Parallel` because the
+public cache-key namespace is intentionally identical to the application.
+
+Cleanup runs in `finally`, checks the generated project-name prefix, and removes
+only that project's containers/network/volume. Development resources are not
+selected. Failed native commands throw, including failed cleanup.
+
+## Coverage map
+
+| Area | Tests / script | Main cases |
+| --- | --- | --- |
+| Migrations | `scripts/integration.ps1` | Clean 0/4/0/4, repeated up, dirty rejection, five tables |
+| Constraints / rollback | `internal/repository/postgres/*_test.go` | Foreign keys, uniqueness, validation constraints, atomic project/owner creation, cancellation |
+| Authentication | `internal/handler/auth*_integration_test.go` | Register, duplicate email, login, safe credential errors, current user, invalid/expired JWT |
+| Projects / membership | `internal/handler/project*_integration_test.go` | CRUD, owner membership, role matrix, cross-project access, concurrent member changes |
+| Tasks | `internal/handler/task*_integration_test.go` | CRUD, assignment, status transitions, nullable PATCH, permissions, mixed IDs, filters/search/sort/pages |
+| Comments | `internal/handler/comment_integration_test.go` | CRUD, author/owner/admin rules, mixed task/comment IDs, cascades |
+| Redis client | `internal/platform/cache/redis_test.go` | Real miss/hit, explicit TTL and expiry, delete, deadline and unavailable server |
+| Cache HTTP | `internal/handler/cache_integration_test.go` | Real cache, malformed payload, invalidation, removed members, no Redis access before authorization, real closed-client fallback with PostgreSQL |
+| Cache policy | `internal/repository/cache/*_test.go` | Entity-read counts on miss/hit, no negative cache, safe logs, cancellation, invalidation failure |
+| Container outage | `scripts/cache-smoke.ps1` | Stop real Redis, read/write/login fallback, API startup during outage, recovery, disabled cache |
+
+## Container smoke tests
+
+Each script creates and cleans its own random Compose project. Run sequentially:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/auth-smoke.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/projects-smoke.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/tasks-smoke.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/cache-smoke.ps1
+```
+
+These use loopback ports documented in each script's `param` block. The cache
+smoke script also runs the uncached complete Go suite with real dependencies.
+Never point integration variables at personal or production services, run
+`FLUSHDB`, or remove the development PostgreSQL volume as a test cleanup step.
