@@ -63,3 +63,46 @@ func TestCommentRepositoryIntegration(t *testing.T) {
 		t.Fatal("connection leaked")
 	}
 }
+
+func TestCommentWriteRechecksRoleIntegration(t *testing.T) {
+	pool, task, owner, admin := taskFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	repo := NewCommentRepository(pool, 8*time.Second)
+	c, err := repo.Create(ctx, task.ProjectID, domain.Comment{TaskID: task.ID, AuthorID: owner.ID, Body: "Original"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	blocker, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rollback(blocker)
+	if err := lockProject(ctx, blocker, task.ProjectID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := blocker.Exec(ctx, `UPDATE project_members SET role='member' WHERE project_id=$1 AND user_id=$2`, task.ProjectID, admin.ID); err != nil {
+		t.Fatal(err)
+	}
+	result := make(chan error, 1)
+	go func() {
+		_, err := repo.Update(ctx, task.ProjectID, task.ID, c.ID, admin.ID, "Must not persist")
+		result <- err
+	}()
+	waitTaskWriter(t, pool)
+	if err := blocker.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-result:
+		if !errors.Is(err, domain.ErrForbidden) {
+			t.Fatalf("stale comment permission accepted: %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("comment write did not finish")
+	}
+	got, err := repo.ByID(ctx, task.ProjectID, task.ID, c.ID)
+	if err != nil || got.Body != "Original" || pool.Stat().AcquiredConns() != 0 {
+		t.Fatal("failed comment write changed data or leaked connection")
+	}
+}

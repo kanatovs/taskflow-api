@@ -141,7 +141,7 @@ Branch: `feature/task-management`
   Filters: status, priority, assignee, creator, due date, text search.
   Commit: `feat(tasks): add filtering search and pagination`
 
-- [ ] TF-022 — Complete task and comment tests.
+- [x] TF-022 — Complete task and comment tests.
   Commit: `test(tasks): cover task and comment flows`
 
 Acceptance:

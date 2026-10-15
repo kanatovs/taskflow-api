@@ -646,3 +646,32 @@ Collections use the same page defaults and stable ID order as tasks. Mixed
 project/task/comment IDs return 404 after the project membership check.
 Deleting a task or project cascades to its comments. Member removal preserves
 authorship, but a removed author cannot read or mutate comments.
+
+## Task and comment verification
+
+Run all Go tests against a separate local PostgreSQL instance:
+
+```powershell
+$env:TEST_POSTGRES_URL = "postgres://taskflow:local_example_only@127.0.0.1:15437/taskflow?sslmode=disable"
+go test -count=1 ./...
+Remove-Item Env:TEST_POSTGRES_URL
+```
+
+The existing test helper creates and drops only randomly named `taskflow_test_*`
+databases. Never point it at development data or production. Without the variable,
+PostgreSQL integration tests are skipped. Tests cover task/comment CRUD, input,
+authentication, authorization, mixed IDs, repository failures, context propagation,
+deadlines, nullable PATCH fields, constraints, cascades, filters/search/pagination,
+and writes waiting on concurrent membership/role/status changes.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ./scripts/tasks-smoke.ps1
+```
+
+The smoke script uses a randomly named Compose project, API port 18083 and
+PostgreSQL port 15438 (override with `-ApiPort` / `-PostgresPort`). It verifies
+migration up/repeated-up/down/down/up and clean versions 4/3/2/4, task/comment
+schema, registration/login, all new HTTP routes, permissions, nullable fields,
+combined filters, stable pages, cross-project/task rejection, logs, and graceful
+shutdown. It removes only its own containers and volume in `finally`, and
+restores process environment variables. It never rolls back the development DB.
