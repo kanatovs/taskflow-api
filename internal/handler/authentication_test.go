@@ -70,7 +70,7 @@ func TestAuthenticatedMeHTTP(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var logs bytes.Buffer
 			repo := &currentUserRepository{lookupErr: tt.repoErr}
-			router := NewRouter(slog.New(slog.NewJSONHandler(&logs, nil)), nil, NewAuthHandler(service.NewAuthService(repo, verifier), verifier), nil)
+			router := NewRouter(slog.New(slog.NewJSONHandler(&logs, nil)), nil, NewAuthHandler(service.NewAuthService(repo, verifier), verifier), nil, nil)
 			request := httptest.NewRequest("GET", "/api/v1/users/me", nil)
 			if tt.authorization != "" {
 				request.Header.Set("Authorization", tt.authorization)

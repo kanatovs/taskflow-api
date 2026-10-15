@@ -8,7 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func NewRouter(logger *slog.Logger, readiness *Readiness, auth *AuthHandler, projects *ProjectHandler) http.Handler {
+func NewRouter(logger *slog.Logger, readiness *Readiness, auth *AuthHandler, projects *ProjectHandler, tasks *TaskHandler) http.Handler {
 	router := chi.NewRouter()
 	router.Use(requestMiddleware(logger))
 	router.NotFound(func(w http.ResponseWriter, r *http.Request) {
@@ -26,6 +26,22 @@ func NewRouter(logger *slog.Logger, readiness *Readiness, auth *AuthHandler, pro
 		router.Post("/api/v1/auth/register", auth.Register)
 		router.Post("/api/v1/auth/login", auth.Login)
 		router.With(auth.Authenticate).Get("/api/v1/users/me", auth.Me)
+		if tasks != nil {
+			router.Route("/api/v1/projects/{projectID}/tasks", func(r chi.Router) {
+				r.Use(auth.Authenticate)
+				r.Post("/", tasks.Create)
+				r.Get("/", tasks.List)
+				r.Get("/{taskID}", tasks.Get)
+				r.Patch("/{taskID}", tasks.Update)
+				r.Delete("/{taskID}", tasks.Delete)
+				if tasks.comments != nil {
+					r.Post("/{taskID}/comments", tasks.comments.Create)
+					r.Get("/{taskID}/comments", tasks.comments.List)
+					r.Patch("/{taskID}/comments/{commentID}", tasks.comments.Update)
+					r.Delete("/{taskID}/comments/{commentID}", tasks.comments.Delete)
+				}
+			})
+		}
 		if projects != nil {
 			router.Route("/api/v1/projects", func(r chi.Router) {
 				r.Use(auth.Authenticate)

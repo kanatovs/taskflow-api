@@ -100,7 +100,7 @@ func TestProjectHandlerErrorMappingAndContext(t *testing.T) {
 			var logs bytes.Buffer
 			p := &projectHandlerFake{err: failure.err}
 			m := &projectMemberHandlerFake{projectHandlerFake: projectHandlerFake{err: failure.err}}
-			router := NewRouter(slog.New(slog.NewJSONHandler(&logs, nil)), nil, NewAuthHandler(nil, issuer), NewProjectHandler(p, m))
+			router := NewRouter(slog.New(slog.NewJSONHandler(&logs, nil)), nil, NewAuthHandler(nil, issuer), NewProjectHandler(p, m), nil)
 			req := httptest.NewRequest(route.method, route.path, strings.NewReader(route.body)).WithContext(ctx)
 			req.Header.Set("Authorization", "Bearer "+access.AccessToken)
 			w := httptest.NewRecorder()

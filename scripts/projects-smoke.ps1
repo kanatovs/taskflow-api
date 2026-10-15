@@ -80,11 +80,11 @@ try {
     Assert-Schema './scripts/check-projects-schema.sql'
     Invoke-Compose @('run', '--rm', 'migrate', 'up')
     # This fresh project's tables are empty; rollback never touches development data.
-    Invoke-Compose @('run', '--rm', 'migrate', 'down', '1')
+    Invoke-Compose @('run', '--rm', 'migrate', 'goto', '1')
     Assert-Schema './scripts/check-users-schema.sql'
     Invoke-Compose @('run', '--rm', 'migrate', 'up')
     Assert-Schema './scripts/check-projects-schema.sql'
-    Write-Output 'Project migration up/repeated-up/down/up checks passed'
+    Write-Output 'Project migration up/repeated-up/rollback-to-users/up checks passed'
     Invoke-Compose @('up', '-d', '--build', '--wait', 'api')
     Add-Type -AssemblyName System.Net.Http
     $httpClient = [Net.Http.HttpClient]::new()

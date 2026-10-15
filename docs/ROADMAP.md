@@ -114,10 +114,10 @@ Acceptance:
 
 Branch: `feature/task-management`
 
-- [ ] TF-017 — Add task migrations, model, and PostgreSQL repository.
+- [x] TF-017 — Add task migrations, model, and PostgreSQL repository.
   Commit: `feat(tasks): add task schema and repository`
 
-- [ ] TF-018 — Implement task CRUD.
+- [x] TF-018 — Implement task CRUD.
   Endpoints:
   - `POST /api/v1/projects/{projectID}/tasks`
   - `GET /api/v1/projects/{projectID}/tasks`
@@ -126,10 +126,10 @@ Branch: `feature/task-management`
   - `DELETE /api/v1/projects/{projectID}/tasks/{taskID}`
   Commit: `feat(tasks): implement task CRUD`
 
-- [ ] TF-019 — Add assignment rules, status transitions, and authorization.
+- [x] TF-019 — Add assignment rules, status transitions, and authorization.
   Commit: `feat(tasks): add assignment and authorization rules`
 
-- [ ] TF-020 — Add task comments.
+- [x] TF-020 — Add task comments.
   Endpoints:
   - `POST /api/v1/projects/{projectID}/tasks/{taskID}/comments`
   - `GET /api/v1/projects/{projectID}/tasks/{taskID}/comments`
@@ -137,11 +137,11 @@ Branch: `feature/task-management`
   - `DELETE /api/v1/projects/{projectID}/tasks/{taskID}/comments/{commentID}`
   Commit: `feat(comments): implement task comments`
 
-- [ ] TF-021 — Add filtering, search, sorting, and pagination.
+- [x] TF-021 — Add filtering, search, sorting, and pagination.
   Filters: status, priority, assignee, creator, due date, text search.
   Commit: `feat(tasks): add filtering search and pagination`
 
-- [ ] TF-022 — Complete task and comment tests.
+- [x] TF-022 — Complete task and comment tests.
   Commit: `test(tasks): cover task and comment flows`
 
 Acceptance:

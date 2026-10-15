@@ -31,6 +31,9 @@ Development follows small, reviewable roadmap tasks. The repository-level
 - PostgreSQL connection pooling and public `GET /ready` readiness checks.
 - Protected project CRUD with owner/admin/member permissions and member-only listing.
 - Project membership management using existing user IDs, with protected owner roles.
+- Protected project-scoped task CRUD with nullable assignment/due dates,
+  database constraints, and integration tests.
+- Task comments with author/owner/admin editing permissions.
 - User registration with bcrypt, login with JWT, and authenticated current-user
   lookup at `GET /api/v1/users/me`.
 - Public `GET /health` endpoint returning `200 OK` and JSON:
@@ -578,3 +581,97 @@ go test ./...
 go vet ./...
 go build ./...
 ```
+
+## Tasks
+
+All task routes require a Bearer JWT and current project membership:
+
+- `POST /api/v1/projects/{projectID}/tasks` creates a task (201).
+- `GET /api/v1/projects/{projectID}/tasks` lists tasks (200).
+- `GET /api/v1/projects/{projectID}/tasks/{taskID}` reads a task (200).
+- `PATCH /api/v1/projects/{projectID}/tasks/{taskID}` changes fields (200).
+- `DELETE /api/v1/projects/{projectID}/tasks/{taskID}` deletes a task (204).
+
+Create accepts `title` (required, trimmed, 1–200 characters), `description`
+(up to 2000 characters), `status` (`todo` by default), `priority` (`medium`
+by default), optional `assignee_id`, and optional RFC3339 `due_date`.
+The server sets the creator and project IDs. PATCH preserves omitted fields;
+`assignee_id: null` and `due_date: null` clear their values. Empty patches,
+unknown fields, invalid IDs, enum values, timestamps, and oversized bodies are
+rejected. Dates are returned in UTC. Collections use `page`/`page_size`
+(default 1/20, maximum size 100), stable ID order, and total metadata.
+Task lookup and mutation always use both project and task IDs.
+
+Task listing accepts any combination of `status`, `priority`, `assignee_id`,
+`creator_id`, `due_from`, `due_to`, and `search`. Due-date bounds are inclusive
+RFC3339 timestamps; tasks without a due date do not match a date bound. Search
+is a case-insensitive literal substring of title or description (up to 200
+characters); `%` and `_` are ordinary characters. URL-encode query values.
+
+`sort` accepts `id` (default), `created_at`, `updated_at`, `due_date`, `priority`,
+`status`, or `title`; `order` is `asc` (default) or `desc`. Priority sorts
+low/medium/high and status sorts todo/in_progress/done. Null dates always sort
+last. ID in the same direction breaks ties. Repeated/unknown parameters,
+invalid values, and reversed date ranges return 400. Count and page share one
+PostgreSQL snapshot; the total is retained even for an empty page. Offset
+pagination is deterministic for unchanged data; separate requests can observe
+concurrent changes. Search scans the selected project's text without a full-text
+index; no new search service or dependency is introduced.
+All current members may create and read tasks. Owners/admins and the task creator
+may edit, assign, or delete a task. The current assignee may update only `status`;
+other members may not mutate it. Every new task starts in `todo`.
+
+Allowed transitions are `todo -> in_progress`, `in_progress -> todo`,
+`in_progress -> done`, and `done -> in_progress`. Repeating the current status
+is allowed; other transitions return 409. Assignment requires a current member
+of the same project (400 otherwise). Removing membership preserves historical
+creator/assignee IDs but immediately removes access; a manager can clear or
+replace the assignment. Permissions, assignment, and transitions are checked
+again inside the write transaction under the same project lock used by member
+changes, so a stale service check cannot authorize a write.
+
+## Task comments
+
+Current project members may create and list comments:
+
+- `POST /api/v1/projects/{projectID}/tasks/{taskID}/comments` (201).
+- `GET /api/v1/projects/{projectID}/tasks/{taskID}/comments` (200).
+- `PATCH /api/v1/projects/{projectID}/tasks/{taskID}/comments/{commentID}` (200).
+- `DELETE /api/v1/projects/{projectID}/tasks/{taskID}/comments/{commentID}` (204).
+
+Create and PATCH accept only `body`, trimmed to 1–2000 characters. The server
+sets the author. Only the comment author or a current project owner/admin may
+edit or delete it. Task creation/assignment does not grant moderation rights.
+Collections use the same page defaults and stable ID order as tasks. Mixed
+project/task/comment IDs return 404 after the project membership check.
+Deleting a task or project cascades to its comments. Member removal preserves
+authorship, but a removed author cannot read or mutate comments.
+
+## Task and comment verification
+
+Run all Go tests against a separate local PostgreSQL instance:
+
+```powershell
+$env:TEST_POSTGRES_URL = "postgres://taskflow:local_example_only@127.0.0.1:15437/taskflow?sslmode=disable"
+go test -count=1 ./...
+Remove-Item Env:TEST_POSTGRES_URL
+```
+
+The existing test helper creates and drops only randomly named `taskflow_test_*`
+databases. Never point it at development data or production. Without the variable,
+PostgreSQL integration tests are skipped. Tests cover task/comment CRUD, input,
+authentication, authorization, mixed IDs, repository failures, context propagation,
+deadlines, nullable PATCH fields, constraints, cascades, filters/search/pagination,
+and writes waiting on concurrent membership/role/status changes.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ./scripts/tasks-smoke.ps1
+```
+
+The smoke script uses a randomly named Compose project, API port 18083 and
+PostgreSQL port 15438 (override with `-ApiPort` / `-PostgresPort`). It verifies
+migration up/repeated-up/down/down/up and clean versions 4/3/2/4, task/comment
+schema, registration/login, all new HTTP routes, permissions, nullable fields,
+combined filters, stable pages, cross-project/task rejection, logs, and graceful
+shutdown. It removes only its own containers and volume in `finally`, and
+restores process environment variables. It never rolls back the development DB.
