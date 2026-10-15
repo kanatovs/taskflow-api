@@ -186,7 +186,7 @@ Branches as appropriate:
 - [x] TF-027 — Add GitHub Actions for formatting, vetting, tests, and build.
   Commit: `ci: add automated Go checks`
 
-- [ ] TF-028 — Complete README, setup, architecture, ER diagram, and examples.
+- [x] TF-028 — Complete README, setup, architecture, ER diagram, and examples.
   Commit: `docs: complete project documentation`
 
 - [ ] TF-029 — Perform final security, reliability, and dependency review.
