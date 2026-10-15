@@ -176,23 +176,23 @@ Branches as appropriate:
 - `docs/api-documentation`
 - `ci/github-actions`
 
-- [ ] TF-025 — Add and validate OpenAPI specification and examples.
+- [x] TF-025 — Add and validate OpenAPI specification and examples.
   File: `docs/openapi.yaml`
   Commit: `docs(api): add OpenAPI specification`
 
-- [ ] TF-026 — Add PostgreSQL and Redis integration tests.
+- [x] TF-026 — Add PostgreSQL and Redis integration tests.
   Commit: `test(integration): cover persistence and cache`
 
-- [ ] TF-027 — Add GitHub Actions for formatting, vetting, tests, and build.
+- [x] TF-027 — Add GitHub Actions for formatting, vetting, tests, and build.
   Commit: `ci: add automated Go checks`
 
-- [ ] TF-028 — Complete README, setup, architecture, ER diagram, and examples.
+- [x] TF-028 — Complete README, setup, architecture, ER diagram, and examples.
   Commit: `docs: complete project documentation`
 
-- [ ] TF-029 — Perform final security, reliability, and dependency review.
+- [x] TF-029 — Perform final security, reliability, and dependency review.
   Commit: `refactor: complete release readiness review`
 
-- [ ] TF-030 — Prepare the first stable release.
+- [x] TF-030 — Prepare the first stable release.
   Commit: `chore: prepare v1 release`
 
 Final acceptance:

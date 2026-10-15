@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -16,6 +17,16 @@ import (
 	repositorycache "github.com/kanatovs/taskflow-api/internal/repository/cache"
 	"github.com/redis/go-redis/v9"
 )
+
+type observedIntegrationStore struct {
+	repositorycache.Store
+	reads atomic.Int64
+}
+
+func (s *observedIntegrationStore) Get(ctx context.Context, key string) ([]byte, bool, error) {
+	s.reads.Add(1)
+	return s.Store.Get(ctx, key)
+}
 
 func TestCacheHTTPIntegration(t *testing.T) {
 	addr := os.Getenv("TEST_REDIS_ADDR")
@@ -30,7 +41,8 @@ func TestCacheHTTPIntegration(t *testing.T) {
 	t.Cleanup(func() { store.Close() })
 	inspect := redis.NewClient(&redis.Options{Addr: addr, ReadTimeout: time.Second, WriteTimeout: time.Second, ContextTimeoutEnabled: true, MaxRetries: -1})
 	t.Cleanup(func() { inspect.Close() })
-	f := newProjectHTTP(t, store)
+	observed := &observedIntegrationStore{Store: store}
+	f := newProjectHTTP(t, observed)
 	owner, member, outsider := f.users[0].ID, f.users[2].ID, f.users[3].ID
 	var project struct {
 		Data domain.Project `json:"data"`
@@ -85,9 +97,13 @@ func TestCacheHTTPIntegration(t *testing.T) {
 			t.Fatal("invalid cache TTL")
 		}
 	}
+	beforeDenied := observed.reads.Load()
 	for _, p := range []string{path, taskPath} {
 		f.send(t, "GET", p, "", outsider, 403)
 		f.send(t, "GET", p, "", 0, 401)
+	}
+	if observed.reads.Load() != beforeDenied {
+		t.Fatal("unauthenticated or forbidden request accessed Redis")
 	}
 	if err := inspect.Set(ctx, projectKey, "{malformed-private-payload", time.Minute).Err(); err != nil {
 		t.Fatal(err)
@@ -118,8 +134,12 @@ func TestCacheHTTPIntegration(t *testing.T) {
 	}
 	f.send(t, "GET", path+"/tasks?search=Updated", "", owner, 200)
 	f.send(t, "DELETE", fmt.Sprintf("%s/members/%d", path, member), "", owner, 204)
+	beforeDenied = observed.reads.Load()
 	for _, p := range []string{path, taskPath} {
 		f.send(t, "GET", p, "", member, 403)
+	}
+	if observed.reads.Load() != beforeDenied {
+		t.Fatal("removed member accessed Redis")
 	}
 	f.send(t, "DELETE", taskPath, "", owner, 204)
 	assertAbsent(taskKey)
@@ -131,5 +151,41 @@ func TestCacheHTTPIntegration(t *testing.T) {
 	assertAbsent(projectKey)
 	if strings.Contains(f.logs.String(), "malformed-private-payload") {
 		t.Fatal("cached payload leaked into logs")
+	}
+}
+
+func TestCachePostgresFallbackHTTPIntegration(t *testing.T) {
+	// A real closed client fails deterministically without stopping shared Redis.
+	store := platformcache.New(config.Redis{Addr: "127.0.0.1:1", DialTimeout: 20 * time.Millisecond, OperationTimeout: 20 * time.Millisecond})
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	f := newProjectHTTP(t, store)
+	owner := f.users[0].ID
+	p := f.create(t, owner, "Fallback project")
+	path := fmt.Sprintf("/api/v1/projects/%d", p.ID)
+	f.send(t, "GET", "/ready", "", 0, 200)
+	f.send(t, "GET", path, "", owner, 200)
+	f.send(t, "PATCH", path, `{"name":"Persisted without Redis"}`, owner, 200)
+	if body := f.send(t, "GET", path, "", owner, 200); !strings.Contains(string(body), "Persisted without Redis") {
+		t.Fatal("project update lost during Redis failure")
+	}
+	var task struct {
+		Data domain.Task `json:"data"`
+	}
+	if err := json.Unmarshal(f.send(t, "POST", path+"/tasks", `{"title":"Fallback task"}`, owner, 201), &task); err != nil {
+		t.Fatal(err)
+	}
+	taskPath := fmt.Sprintf("%s/tasks/%d", path, task.Data.ID)
+	f.send(t, "GET", taskPath, "", owner, 200)
+	f.send(t, "PATCH", taskPath, `{"title":"Persisted task","status":"in_progress"}`, owner, 200)
+	if body := f.send(t, "GET", taskPath, "", owner, 200); !strings.Contains(string(body), "Persisted task") {
+		t.Fatal("task update lost during Redis failure")
+	}
+	f.send(t, "GET", taskPath, "", f.users[3].ID, 403)
+	f.send(t, "DELETE", taskPath, "", owner, 204)
+	f.send(t, "GET", taskPath, "", owner, 404)
+	if !strings.Contains(f.logs.String(), "Redis read unavailable") || !strings.Contains(f.logs.String(), "Redis invalidation failed") {
+		t.Fatal("safe Redis failure warnings missing")
 	}
 }

@@ -57,8 +57,14 @@ function Assert-Status($Response, [int]$Expected, [string]$Label) {
 function Assert-Schema([bool]$ExpectedSuccess, [string]$Label, [string]$Setup = '') {
     $sql = $Setup + "`n" + (Get-Content -Raw -LiteralPath './scripts/check-users-schema.sql')
     # Failed checks inside a transaction close the connection and roll it back.
-    $output = $sql | & docker compose @composeArguments exec -T postgres sh -c 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1' 2>&1
-    $succeeded = $LASTEXITCODE -eq 0
+    # Windows PowerShell 5.1 turns redirected native stderr into ErrorRecords.
+    # Capture expected SQL failures before restoring fail-fast behavior.
+    $previousErrorAction = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        $output = $sql | & docker compose @composeArguments exec -T postgres sh -c 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1' 2>&1
+        $succeeded = $LASTEXITCODE -eq 0
+    } finally { $ErrorActionPreference = $previousErrorAction }
     if ($succeeded -ne $ExpectedSuccess) {
         throw "$Label produced an unexpected result: $($output -join ' ')"
     }
