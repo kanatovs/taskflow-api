@@ -176,7 +176,7 @@ Branches as appropriate:
 - `docs/api-documentation`
 - `ci/github-actions`
 
-- [ ] TF-025 — Add and validate OpenAPI specification and examples.
+- [x] TF-025 — Add and validate OpenAPI specification and examples.
   File: `docs/openapi.yaml`
   Commit: `docs(api): add OpenAPI specification`
 

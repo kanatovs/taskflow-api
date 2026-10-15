@@ -22,6 +22,19 @@ A Go backend service for collaborative project and task management.
 Development follows small, reviewable roadmap tasks. The repository-level
 [`AGENTS.md`](AGENTS.md) defines architecture, testing, security, and Git rules.
 
+## OpenAPI contract
+
+[`docs/openapi.yaml`](docs/openapi.yaml) describes all implemented endpoints.
+Validate its structure, local references and examples with Python 3.10 or newer:
+
+```powershell
+python -m venv .tmp/docs-venv
+./.tmp/docs-venv/Scripts/python.exe -m pip install -r scripts/requirements-docs.txt
+./.tmp/docs-venv/Scripts/python.exe scripts/validate-openapi.py
+```
+
+The validator is a development tool, not an API runtime dependency.
+
 ## Current functionality
 
 - HTTP server with environment configuration and startup validation, listening
