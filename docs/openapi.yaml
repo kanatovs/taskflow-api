@@ -502,18 +502,29 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/TaskCreate'
-            example:
-              title: Review documentation
-              assignee_id: null
-              due_date: null
+            examples:
+              minimal:
+                value:
+                  title: Review documentation
+                  assignee_id: null
+                  due_date: null
+              nullDefaults:
+                value:
+                  title: Defaults
+                  description: null
+                  status: null
+                  priority: null
+                  assignee_id: null
+                  due_date: null
     get:
       operationId: listTasks
       summary: Filter and list tasks
       description: Requires current project membership; a nonmember gets 403 for an existing project,
-        a missing project gets 404. Filters combine with AND. Search matches title OR description. Unknown,
-        repeated, or empty query values return 400. Sorting has an ID tie-break in the selected direction,
-        NULLS LAST; priority order low/medium/high and status order todo/in_progress/done. Count and page
-        share a repeatable-read snapshot; separate page requests may observe concurrent writes.
+        a missing project gets 404. Filters combine with AND. Search matches the combined title + single
+        space + description, including across that boundary. Unknown, repeated, or empty query values
+        return 400. Sorting has an ID tie-break in the selected direction, NULLS LAST; priority order
+        low/medium/high and status order todo/in_progress/done. Count and page share a repeatable-read
+        snapshot; separate page requests may observe concurrent writes.
       tags:
       - Tasks
       responses:
@@ -891,8 +902,9 @@ components:
       in: query
       schema:
         type: string
-        description: Case-insensitive literal substring in title or description; trimmed; at most 200
-          characters without controls. %, _ and backslash are literal.
+        description: Case-insensitive literal substring in title + single space + description, including
+          across the boundary; trimmed; at most 200 characters without controls. %, _ and backslash are
+          literal.
         minLength: 1
         maxLength: 200
     sort:
@@ -1229,6 +1241,7 @@ components:
             are rejected.
           maxLength: 2000
           default: ''
+          nullable: true
       required:
       - name
     ProjectUpdate:
@@ -1308,13 +1321,16 @@ components:
             are rejected.
           maxLength: 2000
           default: ''
+          nullable: true
         status:
           type: string
           enum:
           - todo
           - ''
+          - null
           default: todo
           description: Only todo is permitted; omitted, null or empty defaults to todo.
+          nullable: true
         priority:
           type: string
           enum:
@@ -1322,8 +1338,10 @@ components:
           - medium
           - high
           - ''
+          - null
           default: medium
           description: Omitted, null or empty defaults to medium.
+          nullable: true
         assignee_id:
           type: integer
           format: int64
@@ -1360,6 +1378,7 @@ components:
           - todo
           - in_progress
           - done
+          - null
           nullable: true
         priority:
           type: string
@@ -1367,6 +1386,7 @@ components:
           - low
           - medium
           - high
+          - null
           nullable: true
         assignee_id:
           type: integer

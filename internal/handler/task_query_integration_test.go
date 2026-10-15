@@ -49,6 +49,7 @@ func TestTaskQueryHTTPIntegration(t *testing.T) {
 		{"due_from=2026-10-22T00:00:00Z", []int64{b.ID}},
 		{"search=nEeDlE", []int64{a.ID}},
 		{"search=ALPHA", []int64{a.ID}},
+		{"search=" + url.QueryEscape("Alpha Needle"), []int64{a.ID}},
 		{"search=" + url.QueryEscape("%_"), []int64{c.ID}},
 		{"search=" + url.QueryEscape("'; DROP TABLE tasks; --"), []int64{}},
 		{"status=todo&priority=high&sort=priority&order=desc", []int64{c.ID, a.ID}},

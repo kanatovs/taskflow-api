@@ -31,7 +31,7 @@ services:
       start_period: 5s
 
   postgres:
-    image: postgres:17-alpine
+    image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
     ports:
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     environment:
@@ -48,7 +48,7 @@ services:
       start_period: 10s
 
   redis:
-    image: redis:8.2.2-alpine
+    image: redis:8.2.10-alpine@sha256:b51665e66f00759be7c3152ad5ac3c66fb2f619c13ef62dea7cc1f9914524635
     # Cache data is disposable: no volume, snapshot, or append-only persistence.
     command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
     healthcheck:
@@ -59,7 +59,7 @@ services:
       start_period: 5s
 
   migrate:
-    image: migrate/migrate:v4.20.1
+    image: migrate/migrate:v4.20.1@sha256:76cc2074cb6642631f34a898ced71e6aeaa6b1a4d78c4daa743275a22e0c5be7
     profiles: ["tools"]
     depends_on:
       postgres:

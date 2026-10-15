@@ -4,7 +4,7 @@ from copy import deepcopy
 from pathlib import Path
 
 import yaml
-from openapi_schema_validator import OAS30Validator
+from openapi_schema_validator import OAS30Validator, oas30_format_checker
 from openapi_spec_validator import validate
 
 
@@ -57,7 +57,7 @@ def check_examples(value):
     elif isinstance(value, dict):
         schema = value.get("schema")
         if schema:
-            validator = OAS30Validator(resolve(schema))
+            validator = OAS30Validator(resolve(schema), format_checker=oas30_format_checker)
             if "example" in value:
                 validator.validate(value["example"])
                 example_count += 1

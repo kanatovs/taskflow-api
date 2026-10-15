@@ -26,3 +26,7 @@ Thumbs.db
 # Local tooling
 .tmp/
 tmp/
+
+# Python documentation/audit tooling
+__pycache__/
+*.pyc

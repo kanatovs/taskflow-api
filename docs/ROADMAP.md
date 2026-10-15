@@ -189,7 +189,7 @@ Branches as appropriate:
 - [x] TF-028 — Complete README, setup, architecture, ER diagram, and examples.
   Commit: `docs: complete project documentation`
 
-- [ ] TF-029 — Perform final security, reliability, and dependency review.
+- [x] TF-029 — Perform final security, reliability, and dependency review.
   Commit: `refactor: complete release readiness review`
 
 - [ ] TF-030 — Prepare the first stable release.

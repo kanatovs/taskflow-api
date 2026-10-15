@@ -205,8 +205,9 @@ rejected with 400. IDs must be positive int64. Times use UTC/RFC3339.
 
 Task-list filters: `status`, `priority`, `assignee_id`, `creator_id`, `due_from`,
 `due_to`, `search`, `sort`, `order`, `page`, `page_size`. Filters combine with AND;
-search matches title OR description case-insensitively, with `%`, `_` and `\`
-treated literally. Due bounds are inclusive RFC3339 timestamps; encode timezone
+search matches the combined `title + " " + description` case-insensitively,
+including across that boundary; `%`, `_` and `\` are literal. Due bounds are
+inclusive RFC3339 timestamps; encode timezone
 `+` as `%2B`. Sort fields: `id`, `created_at`, `updated_at`, `due_date`, `priority`,
 `status`, `title`; order `asc` or `desc`. Default: `id asc`, page 1, size 20
 (max 100). Ties use ID in the same direction, null dates sort last.
