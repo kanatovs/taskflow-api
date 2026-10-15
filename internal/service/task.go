@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -53,6 +54,12 @@ func (s *TaskService) Create(ctx context.Context, actorID, projectID int64, inpu
 	if err := validateTaskChanges(changes); err != nil {
 		return domain.Task{}, err
 	}
+	if input.Status != domain.TaskTodo {
+		return domain.Task{}, &domain.ValidationError{Fields: map[string]string{"status": "new tasks must start as todo"}}
+	}
+	if err := s.validateAssignee(ctx, projectID, input.AssigneeID); err != nil {
+		return domain.Task{}, err
+	}
 	task, err := s.tasks.Create(ctx, domain.Task{ProjectID: projectID, CreatorID: actorID, Title: input.Title, Description: input.Description,
 		Status: input.Status, Priority: input.Priority, AssigneeID: input.AssigneeID, DueDate: utcTime(input.DueDate)})
 	if err != nil {
@@ -90,7 +97,8 @@ func (s *TaskService) List(ctx context.Context, actorID, projectID int64, page, 
 }
 
 func (s *TaskService) Update(ctx context.Context, actorID, projectID, taskID int64, changes domain.TaskChanges) (domain.Task, error) {
-	if _, _, err := s.projects.access(ctx, actorID, projectID); err != nil {
+	_, role, err := s.projects.access(ctx, actorID, projectID)
+	if err != nil {
 		return domain.Task{}, err
 	}
 	if err := validateTaskID(taskID); err != nil {
@@ -103,6 +111,18 @@ func (s *TaskService) Update(ctx context.Context, actorID, projectID, taskID int
 	if err := validateTaskChanges(changes); err != nil {
 		return domain.Task{}, err
 	}
+	current, err := s.tasks.ByID(ctx, projectID, taskID)
+	if err != nil {
+		return domain.Task{}, fmt.Errorf("find task for update: %w", err)
+	}
+	if err := domain.ValidateTaskUpdate(role, actorID, current, changes); err != nil {
+		return domain.Task{}, err
+	}
+	if changes.AssigneeID.Set {
+		if err := s.validateAssignee(ctx, projectID, changes.AssigneeID.Value); err != nil {
+			return domain.Task{}, err
+		}
+	}
 	changes.DueDate.Value = utcTime(changes.DueDate.Value)
 	task, err := s.tasks.Update(ctx, projectID, taskID, actorID, changes)
 	if err != nil {
@@ -112,14 +132,36 @@ func (s *TaskService) Update(ctx context.Context, actorID, projectID, taskID int
 }
 
 func (s *TaskService) Delete(ctx context.Context, actorID, projectID, taskID int64) error {
-	if _, _, err := s.projects.access(ctx, actorID, projectID); err != nil {
+	_, role, err := s.projects.access(ctx, actorID, projectID)
+	if err != nil {
 		return err
 	}
 	if err := validateTaskID(taskID); err != nil {
 		return err
 	}
+	task, err := s.tasks.ByID(ctx, projectID, taskID)
+	if err != nil {
+		return fmt.Errorf("find task for deletion: %w", err)
+	}
+	if !domain.CanManageTask(role, actorID, task) {
+		return domain.ErrForbidden
+	}
 	if err := s.tasks.Delete(ctx, projectID, taskID, actorID); err != nil {
 		return fmt.Errorf("delete task: %w", err)
+	}
+	return nil
+}
+
+func (s *TaskService) validateAssignee(ctx context.Context, projectID int64, userID *int64) error {
+	if userID == nil {
+		return nil
+	}
+	_, err := s.projects.members.ByUser(ctx, projectID, *userID)
+	if errors.Is(err, domain.ErrNotFound) {
+		return &domain.ValidationError{Fields: map[string]string{"assignee_id": "must identify a current project member"}}
+	}
+	if err != nil {
+		return fmt.Errorf("find task assignee: %w", err)
 	}
 	return nil
 }

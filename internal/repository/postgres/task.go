@@ -31,6 +31,12 @@ func (r *TaskRepository) Create(ctx context.Context, input domain.Task) (domain.
 		return domain.Task{}, err
 	}
 	defer rollback(tx)
+	if input.Status != domain.TaskTodo {
+		return domain.Task{}, &domain.ValidationError{Fields: map[string]string{"status": "new tasks must start as todo"}}
+	}
+	if err := checkTaskAssignee(ctx, tx, input.ProjectID, input.AssigneeID); err != nil {
+		return domain.Task{}, err
+	}
 	task, err := scanTask(tx.QueryRow(ctx, `INSERT INTO tasks
         (project_id,title,description,status,priority,assignee_id,creator_id,due_date)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING `+taskColumns,
@@ -96,6 +102,18 @@ func (r *TaskRepository) Update(ctx context.Context, projectID, taskID, actorID 
 		return domain.Task{}, err
 	}
 	defer rollback(tx)
+	current, role, err := taskWriteAccess(ctx, tx, projectID, taskID, actorID)
+	if err != nil {
+		return domain.Task{}, err
+	}
+	if err := domain.ValidateTaskUpdate(role, actorID, current, changes); err != nil {
+		return domain.Task{}, err
+	}
+	if changes.AssigneeID.Set {
+		if err := checkTaskAssignee(ctx, tx, projectID, changes.AssigneeID.Value); err != nil {
+			return domain.Task{}, err
+		}
+	}
 	task, err := scanTask(tx.QueryRow(ctx, `UPDATE tasks SET
         title=COALESCE($3,title), description=COALESCE($4,description), status=COALESCE($5,status), priority=COALESCE($6,priority),
         assignee_id=CASE WHEN $7 THEN $8 ELSE assignee_id END,
@@ -120,6 +138,13 @@ func (r *TaskRepository) Delete(ctx context.Context, projectID, taskID, actorID 
 		return err
 	}
 	defer rollback(tx)
+	task, role, err := taskWriteAccess(ctx, tx, projectID, taskID, actorID)
+	if err != nil {
+		return err
+	}
+	if !domain.CanManageTask(role, actorID, task) {
+		return domain.ErrForbidden
+	}
 	result, err := tx.Exec(ctx, `DELETE FROM tasks WHERE project_id=$1 AND id=$2`, projectID, taskID)
 	if err != nil {
 		return fmt.Errorf("delete task: %w", err)
@@ -131,6 +156,26 @@ func (r *TaskRepository) Delete(ctx context.Context, projectID, taskID, actorID 
 		return fmt.Errorf("commit task deletion: %w", err)
 	}
 	return nil
+}
+
+func taskWriteAccess(ctx context.Context, tx pgx.Tx, projectID, taskID, actorID int64) (domain.Task, domain.ProjectRole, error) {
+	task, err := scanTask(tx.QueryRow(ctx, `SELECT `+taskColumns+` FROM tasks WHERE project_id=$1 AND id=$2 FOR UPDATE`, projectID, taskID))
+	if err != nil {
+		return domain.Task{}, "", fmt.Errorf("lock task: %w", mapTaskError(err))
+	}
+	role, err := memberRole(ctx, tx, projectID, actorID)
+	return task, role, err
+}
+
+func checkTaskAssignee(ctx context.Context, tx pgx.Tx, projectID int64, assigneeID *int64) error {
+	if assigneeID == nil {
+		return nil
+	}
+	_, err := memberRole(ctx, tx, projectID, *assigneeID)
+	if errors.Is(err, domain.ErrForbidden) {
+		return &domain.ValidationError{Fields: map[string]string{"assignee_id": "must identify a current project member"}}
+	}
+	return err
 }
 
 // Project/member writes use the same lock, so membership cannot disappear mid-write.

@@ -600,4 +600,15 @@ unknown fields, invalid IDs, enum values, timestamps, and oversized bodies are
 rejected. Dates are returned in UTC. Collections use `page`/`page_size`
 (default 1/20, maximum size 100), stable ID order, and total metadata.
 Task lookup and mutation always use both project and task IDs.
-Assignment policies and status-transition restrictions are the next roadmap task.
+All current members may create and read tasks. Owners/admins and the task creator
+may edit, assign, or delete a task. The current assignee may update only `status`;
+other members may not mutate it. Every new task starts in `todo`.
+
+Allowed transitions are `todo -> in_progress`, `in_progress -> todo`,
+`in_progress -> done`, and `done -> in_progress`. Repeating the current status
+is allowed; other transitions return 409. Assignment requires a current member
+of the same project (400 otherwise). Removing membership preserves historical
+creator/assignee IDs but immediately removes access; a manager can clear or
+replace the assignment. Permissions, assignment, and transitions are checked
+again inside the write transaction under the same project lock used by member
+changes, so a stale service check cannot authorize a write.

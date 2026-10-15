@@ -126,7 +126,7 @@ Branch: `feature/task-management`
   - `DELETE /api/v1/projects/{projectID}/tasks/{taskID}`
   Commit: `feat(tasks): implement task CRUD`
 
-- [ ] TF-019 — Add assignment rules, status transitions, and authorization.
+- [x] TF-019 — Add assignment rules, status transitions, and authorization.
   Commit: `feat(tasks): add assignment and authorization rules`
 
 - [ ] TF-020 — Add task comments.

@@ -50,3 +50,34 @@ type TaskChanges struct {
 	AssigneeID  Nullable[int64]     `json:"assignee_id"`
 	DueDate     Nullable[time.Time] `json:"due_date"`
 }
+
+func CanManageTask(role ProjectRole, actorID int64, task Task) bool {
+	return role == RoleOwner || role == RoleAdmin || task.CreatorID == actorID
+}
+
+// ValidateTaskUpdate is shared by the service and the locked repository write.
+func ValidateTaskUpdate(role ProjectRole, actorID int64, task Task, changes TaskChanges) error {
+	if !CanManageTask(role, actorID, task) {
+		statusOnly := changes.Status != nil && changes.Title == nil && changes.Description == nil && changes.Priority == nil && !changes.AssigneeID.Set && !changes.DueDate.Set
+		if task.AssigneeID == nil || *task.AssigneeID != actorID || !statusOnly {
+			return ErrForbidden
+		}
+	}
+	if changes.Status != nil && !CanTransitionTask(task.Status, *changes.Status) {
+		return ErrConflict
+	}
+	return nil
+}
+
+func CanTransitionTask(from, to TaskStatus) bool {
+	switch from {
+	case TaskTodo:
+		return to == TaskTodo || to == TaskInProgress
+	case TaskInProgress:
+		return to == TaskInProgress || to == TaskTodo || to == TaskDone
+	case TaskDone:
+		return to == TaskDone || to == TaskInProgress
+	default:
+		return false
+	}
+}
