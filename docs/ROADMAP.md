@@ -114,7 +114,7 @@ Acceptance:
 
 Branch: `feature/task-management`
 
-- [ ] TF-017 — Add task migrations, model, and PostgreSQL repository.
+- [x] TF-017 — Add task migrations, model, and PostgreSQL repository.
   Commit: `feat(tasks): add task schema and repository`
 
 - [ ] TF-018 — Implement task CRUD.

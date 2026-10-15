@@ -31,6 +31,9 @@ Development follows small, reviewable roadmap tasks. The repository-level
 - PostgreSQL connection pooling and public `GET /ready` readiness checks.
 - Protected project CRUD with owner/admin/member permissions and member-only listing.
 - Project membership management using existing user IDs, with protected owner roles.
+- Task schema and PostgreSQL repository with project-scoped CRUD, nullable
+  assignment/due dates, database constraints, and integration tests. HTTP task
+  endpoints are not available yet.
 - User registration with bcrypt, login with JWT, and authenticated current-user
   lookup at `GET /api/v1/users/me`.
 - Public `GET /health` endpoint returning `200 OK` and JSON:
