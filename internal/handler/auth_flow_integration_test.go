@@ -45,7 +45,7 @@ func TestAuthenticationFlowOverHTTPIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	var logs lockedLogBuffer
-	router := handler.NewRouter(slog.New(slog.NewJSONHandler(&logs, nil)), handler.NewReadiness(pool, time.Second), handler.NewAuthHandler(service.NewAuthService(repo, issuer), issuer), nil)
+	router := handler.NewRouter(slog.New(slog.NewJSONHandler(&logs, nil)), handler.NewReadiness(pool, time.Second), handler.NewAuthHandler(service.NewAuthService(repo, issuer), issuer), nil, nil)
 	server := httptest.NewServer(router)
 	t.Cleanup(server.Close)
 	client := server.Client()

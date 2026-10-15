@@ -31,9 +31,8 @@ Development follows small, reviewable roadmap tasks. The repository-level
 - PostgreSQL connection pooling and public `GET /ready` readiness checks.
 - Protected project CRUD with owner/admin/member permissions and member-only listing.
 - Project membership management using existing user IDs, with protected owner roles.
-- Task schema and PostgreSQL repository with project-scoped CRUD, nullable
-  assignment/due dates, database constraints, and integration tests. HTTP task
-  endpoints are not available yet.
+- Protected project-scoped task CRUD with nullable assignment/due dates,
+  database constraints, and integration tests.
 - User registration with bcrypt, login with JWT, and authenticated current-user
   lookup at `GET /api/v1/users/me`.
 - Public `GET /health` endpoint returning `200 OK` and JSON:
@@ -581,3 +580,24 @@ go test ./...
 go vet ./...
 go build ./...
 ```
+
+## Tasks
+
+All task routes require a Bearer JWT and current project membership:
+
+- `POST /api/v1/projects/{projectID}/tasks` creates a task (201).
+- `GET /api/v1/projects/{projectID}/tasks` lists tasks (200).
+- `GET /api/v1/projects/{projectID}/tasks/{taskID}` reads a task (200).
+- `PATCH /api/v1/projects/{projectID}/tasks/{taskID}` changes fields (200).
+- `DELETE /api/v1/projects/{projectID}/tasks/{taskID}` deletes a task (204).
+
+Create accepts `title` (required, trimmed, 1–200 characters), `description`
+(up to 2000 characters), `status` (`todo` by default), `priority` (`medium`
+by default), optional `assignee_id`, and optional RFC3339 `due_date`.
+The server sets the creator and project IDs. PATCH preserves omitted fields;
+`assignee_id: null` and `due_date: null` clear their values. Empty patches,
+unknown fields, invalid IDs, enum values, timestamps, and oversized bodies are
+rejected. Dates are returned in UTC. Collections use `page`/`page_size`
+(default 1/20, maximum size 100), stable ID order, and total metadata.
+Task lookup and mutation always use both project and task IDs.
+Assignment policies and status-transition restrictions are the next roadmap task.

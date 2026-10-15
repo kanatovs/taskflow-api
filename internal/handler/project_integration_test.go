@@ -53,7 +53,7 @@ func newProjectHTTP(t *testing.T) *projectHTTP {
 	projects := postgres.NewProjectRepository(pool, time.Second)
 	members := postgres.NewProjectMemberRepository(pool, time.Second)
 	projectService := service.NewProjectService(projects, members, users)
-	router := handler.NewRouter(slog.New(slog.NewJSONHandler(f.logs, nil)), handler.NewReadiness(pool, time.Second), handler.NewAuthHandler(service.NewAuthService(users, issuer), issuer), handler.NewProjectHandler(projectService, service.NewProjectMemberService(projectService, members)))
+	router := handler.NewRouter(slog.New(slog.NewJSONHandler(f.logs, nil)), handler.NewReadiness(pool, time.Second), handler.NewAuthHandler(service.NewAuthService(users, issuer), issuer), handler.NewProjectHandler(projectService, service.NewProjectMemberService(projectService, members)), handler.NewTaskHandler(service.NewTaskService(projectService, postgres.NewTaskRepository(pool, time.Second))))
 	f.server = httptest.NewServer(router)
 	f.server.Client().Timeout = 5 * time.Second
 	t.Cleanup(f.server.Close)

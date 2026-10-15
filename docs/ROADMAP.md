@@ -117,7 +117,7 @@ Branch: `feature/task-management`
 - [x] TF-017 — Add task migrations, model, and PostgreSQL repository.
   Commit: `feat(tasks): add task schema and repository`
 
-- [ ] TF-018 — Implement task CRUD.
+- [x] TF-018 — Implement task CRUD.
   Endpoints:
   - `POST /api/v1/projects/{projectID}/tasks`
   - `GET /api/v1/projects/{projectID}/tasks`

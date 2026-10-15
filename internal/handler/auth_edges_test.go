@@ -37,7 +37,7 @@ func TestAuthenticationHeaderEdges(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			repo := &currentUserRepository{}
-			router := NewRouter(slog.New(slog.NewTextHandler(io.Discard, nil)), nil, NewAuthHandler(service.NewAuthService(repo, issuer), issuer), nil)
+			router := NewRouter(slog.New(slog.NewTextHandler(io.Discard, nil)), nil, NewAuthHandler(service.NewAuthService(repo, issuer), issuer), nil, nil)
 			request := httptest.NewRequest("GET", "/api/v1/users/me", nil)
 			for _, header := range tt.headers {
 				request.Header.Add("Authorization", header)
@@ -57,7 +57,7 @@ func TestAuthenticationHeaderEdges(t *testing.T) {
 func TestLoginJSONEdges(t *testing.T) {
 	for _, body := range []string{"", `[]`, `null`, `{}{"email":"user@example.com"}`, `{"password":false}`, `{"email":"` + strings.Repeat("a", 5000) + `"}`} {
 		repo := &registerRepository{}
-		router := NewRouter(slog.New(slog.NewTextHandler(io.Discard, nil)), nil, NewAuthHandler(service.NewAuthService(repo, nil), nil), nil)
+		router := NewRouter(slog.New(slog.NewTextHandler(io.Discard, nil)), nil, NewAuthHandler(service.NewAuthService(repo, nil), nil), nil, nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, httptest.NewRequest("POST", "/api/v1/auth/login", strings.NewReader(body)))
 		if w.Code != 400 {
