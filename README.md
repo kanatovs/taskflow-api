@@ -675,3 +675,87 @@ schema, registration/login, all new HTTP routes, permissions, nullable fields,
 combined filters, stable pages, cross-project/task rejection, logs, and graceful
 shutdown. It removes only its own containers and volume in `finally`, and
 restores process environment variables. It never rolls back the development DB.
+
+## Optional Redis detail cache
+
+PostgreSQL is authoritative. Redis only accelerates single project and task
+detail GET requests. Lists, filters, search, comments, memberships, users, password
+hashes, tokens, HTTP envelopes, errors and authorization decisions are not cached.
+
+Each detail request verifies the JWT, then reads the current user and membership
+from PostgreSQL before accessing Redis. A cache hit avoids the entity SELECT;
+authorization still uses PostgreSQL. On a miss, the detail repository reads
+PostgreSQL and stores the successful domain entity as JSON with an explicit TTL.
+Centralized keys are `taskflow:v1:project:{projectID}` and
+`taskflow:v1:project:{projectID}:task:{taskID}`. Task keys include both IDs and
+decoded identities are checked, preventing cross-project cache reuse.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `REDIS_ADDR` | empty on host; `redis:6379` in Compose | Host:port; empty disables caching |
+| `REDIS_PASSWORD` | empty | Optional client password; provision server authentication separately |
+| `REDIS_DB` | `0` | Standalone database number, 0 through 15 |
+| `CACHE_TTL` | `1m` | Positive TTL, at least 1ms |
+| `REDIS_DIAL_TIMEOUT` | `200ms` | Connection timeout, at least 1ms |
+| `REDIS_OPERATION_TIMEOUT` | `100ms` | Per-operation context/socket/pool timeout, at least 1ms |
+
+```powershell
+docker compose up -d --wait postgres redis
+docker compose run --rm migrate up
+docker compose up -d --build --wait api
+```
+
+The pinned Redis container has a healthcheck, a 128MB eviction limit, no published
+port and no persistent volume or persistence files. Its data is disposable: Redis
+can be restarted, removed or recreated safely. `docker compose up -d --force-recreate
+redis` clears this cache without changing PostgreSQL. Never remove the PostgreSQL
+volume as a cache repair step. Redis is not a readiness dependency: `/ready` only
+checks PostgreSQL. A lazy client permits startup during Redis downtime and closes
+after HTTP shutdown.
+
+Redis timeouts, connection failures, malformed JSON or mismatched entity IDs
+produce safe warnings and fall back to PostgreSQL. Malformed entries are deleted
+when possible. Warnings exclude raw errors, cached payloads and credentials.
+Only successful entity reads populate the cache; negative results are not cached.
+Concurrent misses may duplicate entity reads; there are no distributed locks,
+stampede prevention, list caching or cache warming. PostgreSQL reads remain
+necessary for authentication and authorization even on a hit.
+
+Successful project updates/deletes invalidate that project's detail key.
+Successful task updates/deletes invalidate the task detail key, including
+assignment, status, priority and due-date changes. Creation does not invalidate
+detail keys, and comments do not invalidate tasks because task details contain no
+derived comment information. Writes and their permission checks always use the
+PostgreSQL repositories, never cached entities.
+
+Invalidation failures are logged and never roll back a committed PostgreSQL
+mutation or turn it into an HTTP 500. Stale data can survive a failed invalidation
+until its TTL expires. A read already in flight can also refill an old value
+after a concurrent invalidation; this accepted cache-aside race is bounded by the
+TTL of that fill. A successful invalidation removes the existing entry; subsequent
+uncontended reads load the new database value. There are no consistency guarantees
+for cached details beyond this bounded staleness. Authorization remains live in
+PostgreSQL, including when a member is removed or a project is deleted. Task keys
+left by a project cascade become inaccessible and expire without a key scan.
+
+Run `go test ./...` for unit tests. For the Redis client integration test, publish
+an isolated disposable Redis on loopback (the normal Compose service has no host
+port), set `TEST_REDIS_ADDR=127.0.0.1:<port>`, and run
+`go test -count=1 ./internal/platform/cache`. It only deletes its own unique test
+key and never flushes a database. PostgreSQL integration tests continue to use
+`TEST_POSTGRES_URL` and unique disposable databases as documented above.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ./scripts/cache-smoke.ps1
+```
+
+This script creates a random isolated Compose project with PostgreSQL on 15440,
+Redis on 16380 and the API on 18084, all on loopback (override with `-PostgresPort`,
+`-RedisPort`, `-ApiPort`). `scripts/compose.cache-test.yaml` publishes Redis only
+for this test environment. The script runs migrations twice, the complete Go
+suite with real PostgreSQL/Redis, and project/task cache HTTP smoke checks. It
+verifies hit/miss, TTL, JSON safety, permissions, removed members, malformed
+values, invalidation, deletion, uncached lists/search, fallback, writes and
+authentication during an outage, API startup with Redis down, recovery, disabled
+caching and graceful shutdown. It never flushes Redis and removes only its own
+containers/volume, restoring environment variables in `finally`.

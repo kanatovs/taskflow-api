@@ -10,6 +10,12 @@ services:
       DATABASE_TIMEOUT: "${DATABASE_TIMEOUT-3s}"
       JWT_SECRET: "${JWT_SECRET:?Set JWT_SECRET in .env or process environment}"
       JWT_ACCESS_TTL: "${JWT_ACCESS_TTL-15m}"
+      REDIS_ADDR: "${REDIS_ADDR-redis:6379}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD-}"
+      REDIS_DB: "${REDIS_DB-0}"
+      CACHE_TTL: "${CACHE_TTL-1m}"
+      REDIS_DIAL_TIMEOUT: "${REDIS_DIAL_TIMEOUT-200ms}"
+      REDIS_OPERATION_TIMEOUT: "${REDIS_OPERATION_TIMEOUT-100ms}"
       # Preserve explicitly empty values so application validation rejects them.
       HTTP_READ_HEADER_TIMEOUT: "${HTTP_READ_HEADER_TIMEOUT-5s}"
       HTTP_READ_TIMEOUT: "${HTTP_READ_TIMEOUT-10s}"
@@ -40,6 +46,17 @@ services:
       timeout: 3s
       retries: 10
       start_period: 10s
+
+  redis:
+    image: redis:8.2.2-alpine
+    # Cache data is disposable: no volume, snapshot, or append-only persistence.
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
 
   migrate:
     image: migrate/migrate:v4.20.1

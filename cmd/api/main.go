@@ -11,9 +11,11 @@ import (
 
 	"github.com/kanatovs/taskflow-api/internal/config"
 	"github.com/kanatovs/taskflow-api/internal/handler"
+	platformcache "github.com/kanatovs/taskflow-api/internal/platform/cache"
 	"github.com/kanatovs/taskflow-api/internal/platform/database"
 	"github.com/kanatovs/taskflow-api/internal/platform/httpserver"
 	"github.com/kanatovs/taskflow-api/internal/platform/token"
+	repositorycache "github.com/kanatovs/taskflow-api/internal/repository/cache"
 	"github.com/kanatovs/taskflow-api/internal/repository/postgres"
 	"github.com/kanatovs/taskflow-api/internal/service"
 )
@@ -47,12 +49,24 @@ func run() int {
 	auth := handler.NewAuthHandler(service.NewAuthService(users, tokens), tokens)
 	projects := postgres.NewProjectRepository(pool, cfg.DatabaseTimeout)
 	members := postgres.NewProjectMemberRepository(pool, cfg.DatabaseTimeout)
-	projectService := service.NewProjectService(projects, members, users)
-	projectHandler := handler.NewProjectHandler(projectService, service.NewProjectMemberService(projectService, members))
+	var projectDetails service.ProjectDetailReader
+	var taskDetails service.TaskDetailReader
 	tasks := postgres.NewTaskRepository(pool, cfg.DatabaseTimeout)
+	if cfg.Redis.Addr != "" {
+		cache := platformcache.New(cfg.Redis)
+		defer func() {
+			if err := cache.Close(); err != nil {
+				logger.Warn("Redis client close failed")
+			}
+		}()
+		projectDetails = repositorycache.NewProject(projects, cache, cfg.Redis.TTL, logger)
+		taskDetails = repositorycache.NewTask(tasks, cache, cfg.Redis.TTL, logger)
+	}
+	projectService := service.NewProjectService(projects, members, users, projectDetails)
+	projectHandler := handler.NewProjectHandler(projectService, service.NewProjectMemberService(projectService, members))
 	comments := postgres.NewCommentRepository(pool, cfg.DatabaseTimeout)
 	commentHandler := handler.NewCommentHandler(service.NewCommentService(projectService, tasks, comments))
-	taskHandler := handler.NewTaskHandler(service.NewTaskService(projectService, tasks), commentHandler)
+	taskHandler := handler.NewTaskHandler(service.NewTaskService(projectService, tasks, taskDetails), commentHandler)
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,

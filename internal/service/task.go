@@ -23,10 +23,20 @@ type TaskRepository interface {
 type TaskService struct {
 	projects *ProjectService
 	tasks    TaskRepository
+	details  TaskDetailReader
 }
 
-func NewTaskService(projects *ProjectService, tasks TaskRepository) *TaskService {
-	return &TaskService{projects: projects, tasks: tasks}
+type TaskDetailReader interface {
+	ByID(context.Context, int64, int64) (domain.Task, error)
+	Invalidate(context.Context, int64, int64)
+}
+
+func NewTaskService(projects *ProjectService, tasks TaskRepository, details ...TaskDetailReader) *TaskService {
+	s := &TaskService{projects: projects, tasks: tasks}
+	if len(details) > 0 {
+		s.details = details[0]
+	}
+	return s
 }
 
 type CreateTaskInput struct {
@@ -69,11 +79,14 @@ func (s *TaskService) Create(ctx context.Context, actorID, projectID int64, inpu
 }
 
 func (s *TaskService) Get(ctx context.Context, actorID, projectID, taskID int64) (domain.Task, error) {
-	if _, _, err := s.projects.access(ctx, actorID, projectID); err != nil {
+	if err := s.projects.authorizeDetail(ctx, actorID, projectID); err != nil {
 		return domain.Task{}, err
 	}
 	if err := validateTaskID(taskID); err != nil {
 		return domain.Task{}, err
+	}
+	if s.details != nil {
+		return s.details.ByID(ctx, projectID, taskID)
 	}
 	task, err := s.tasks.ByID(ctx, projectID, taskID)
 	if err != nil {
@@ -167,6 +180,9 @@ func (s *TaskService) Update(ctx context.Context, actorID, projectID, taskID int
 	if err != nil {
 		return domain.Task{}, fmt.Errorf("update task: %w", err)
 	}
+	if s.details != nil {
+		s.details.Invalidate(ctx, projectID, taskID)
+	}
 	return task, nil
 }
 
@@ -187,6 +203,9 @@ func (s *TaskService) Delete(ctx context.Context, actorID, projectID, taskID int
 	}
 	if err := s.tasks.Delete(ctx, projectID, taskID, actorID); err != nil {
 		return fmt.Errorf("delete task: %w", err)
+	}
+	if s.details != nil {
+		s.details.Invalidate(ctx, projectID, taskID)
 	}
 	return nil
 }

@@ -31,10 +31,21 @@ type ProjectService struct {
 	projects ProjectRepository
 	members  ProjectMembershipReader
 	users    ProjectUserReader
+	details  ProjectDetailReader
 }
 
-func NewProjectService(projects ProjectRepository, members ProjectMembershipReader, users ProjectUserReader) *ProjectService {
-	return &ProjectService{projects: projects, members: members, users: users}
+type ProjectDetailReader interface {
+	ByID(context.Context, int64) (domain.Project, error)
+	Invalidate(context.Context, int64)
+}
+
+// The optional detail reader is used only after PostgreSQL-backed authorization.
+func NewProjectService(projects ProjectRepository, members ProjectMembershipReader, users ProjectUserReader, details ...ProjectDetailReader) *ProjectService {
+	s := &ProjectService{projects: projects, members: members, users: users}
+	if len(details) > 0 {
+		s.details = details[0]
+	}
+	return s
 }
 
 type CreateProjectInput struct {
@@ -72,8 +83,39 @@ func (s *ProjectService) List(ctx context.Context, userID int64, page, pageSize 
 }
 
 func (s *ProjectService) Get(ctx context.Context, userID, projectID int64) (domain.Project, error) {
-	p, _, err := s.access(ctx, userID, projectID)
-	return p, err
+	if err := s.authorizeDetail(ctx, userID, projectID); err != nil {
+		return domain.Project{}, err
+	}
+	if s.details != nil {
+		return s.details.ByID(ctx, projectID)
+	}
+	p, err := s.projects.ByID(ctx, projectID)
+	if err != nil {
+		return domain.Project{}, fmt.Errorf("find project: %w", err)
+	}
+	return p, nil
+}
+
+// A membership row proves project existence through its foreign key. Only a
+// missing membership needs an entity read to preserve existing 403/404 behavior.
+func (s *ProjectService) authorizeDetail(ctx context.Context, userID, projectID int64) error {
+	if err := s.currentUser(ctx, userID); err != nil {
+		return err
+	}
+	if projectID <= 0 {
+		return &domain.ValidationError{Fields: map[string]string{"project_id": "must be a positive integer"}}
+	}
+	_, err := s.members.ByUser(ctx, projectID, userID)
+	if errors.Is(err, domain.ErrNotFound) {
+		if _, err := s.projects.ByID(ctx, projectID); err != nil {
+			return fmt.Errorf("find project: %w", err)
+		}
+		return domain.ErrForbidden
+	}
+	if err != nil {
+		return fmt.Errorf("find project membership: %w", err)
+	}
+	return nil
 }
 
 func (s *ProjectService) Update(ctx context.Context, userID, projectID int64, changes domain.ProjectChanges) (domain.Project, error) {
@@ -98,6 +140,9 @@ func (s *ProjectService) Update(ctx context.Context, userID, projectID int64, ch
 	if err != nil {
 		return domain.Project{}, fmt.Errorf("update project: %w", err)
 	}
+	if s.details != nil {
+		s.details.Invalidate(ctx, projectID)
+	}
 	return p, nil
 }
 
@@ -111,6 +156,9 @@ func (s *ProjectService) Delete(ctx context.Context, userID, projectID int64) er
 	}
 	if err := s.projects.Delete(ctx, projectID, userID); err != nil {
 		return fmt.Errorf("delete project: %w", err)
+	}
+	if s.details != nil {
+		s.details.Invalidate(ctx, projectID)
 	}
 	return nil
 }

@@ -14,6 +14,7 @@ import (
 
 // Config contains the settings used to start the application.
 type Config struct {
+	Redis                 Redis
 	DatabaseURL           string
 	DatabaseTimeout       time.Duration
 	JWTSecret             string
@@ -78,6 +79,10 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 
+	cfg.Redis, err = loadRedis()
+	if err != nil {
+		return Config{}, err
+	}
 	return cfg, nil
 }
 
