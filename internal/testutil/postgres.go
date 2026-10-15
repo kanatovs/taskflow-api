@@ -74,14 +74,27 @@ func ApplyMigration(t *testing.T, pool *pgxpool.Pool, direction string) {
 		t.Fatal("invalid migration direction")
 	}
 	_, file, _, _ := runtime.Caller(0)
-	path := filepath.Join(filepath.Dir(file), "..", "..", "migrations", "000001_create_users."+direction+".sql")
-	sql, err := os.ReadFile(path)
+	paths, err := filepath.Glob(filepath.Join(filepath.Dir(file), "..", "..", "migrations", "*."+direction+".sql"))
 	if err != nil {
 		t.Fatal(err)
 	}
+	if len(paths) == 0 {
+		t.Fatal("no migrations found")
+	}
+	if direction == "down" {
+		for i, j := 0, len(paths)-1; i < j; i, j = i+1, j-1 {
+			paths[i], paths[j] = paths[j], paths[i]
+		}
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if _, err := pool.Exec(ctx, string(sql)); err != nil {
-		t.Fatalf("apply migration %s: %v", direction, err)
+	for _, path := range paths {
+		sql, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, string(sql)); err != nil {
+			t.Fatalf("apply migration %s: %v", filepath.Base(path), err)
+		}
 	}
 }

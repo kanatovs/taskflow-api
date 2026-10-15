@@ -8,7 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func NewRouter(logger *slog.Logger, readiness *Readiness, auth *AuthHandler) http.Handler {
+func NewRouter(logger *slog.Logger, readiness *Readiness, auth *AuthHandler, projects *ProjectHandler) http.Handler {
 	router := chi.NewRouter()
 	router.Use(requestMiddleware(logger))
 	router.NotFound(func(w http.ResponseWriter, r *http.Request) {
@@ -26,6 +26,22 @@ func NewRouter(logger *slog.Logger, readiness *Readiness, auth *AuthHandler) htt
 		router.Post("/api/v1/auth/register", auth.Register)
 		router.Post("/api/v1/auth/login", auth.Login)
 		router.With(auth.Authenticate).Get("/api/v1/users/me", auth.Me)
+		if projects != nil {
+			router.Route("/api/v1/projects", func(r chi.Router) {
+				r.Use(auth.Authenticate)
+				r.Post("/", projects.Create)
+				r.Get("/", projects.List)
+				r.Get("/{projectID}", projects.Get)
+				r.Patch("/{projectID}", projects.Update)
+				r.Delete("/{projectID}", projects.Delete)
+				if projects.members != nil {
+					r.Get("/{projectID}/members", projects.ListMembers)
+					r.Post("/{projectID}/members", projects.AddMember)
+					r.Patch("/{projectID}/members/{userID}", projects.UpdateMember)
+					r.Delete("/{projectID}/members/{userID}", projects.DeleteMember)
+				}
+			})
+		}
 	}
 	return router
 }

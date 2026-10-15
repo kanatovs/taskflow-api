@@ -54,7 +54,7 @@ func TestRegistrationHTTP(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var logs bytes.Buffer
 			repo := &registerRepository{err: tt.err}
-			router := NewRouter(slog.New(slog.NewJSONHandler(&logs, nil)), nil, NewAuthHandler(service.NewAuthService(repo, nil), nil))
+			router := NewRouter(slog.New(slog.NewJSONHandler(&logs, nil)), nil, NewAuthHandler(service.NewAuthService(repo, nil), nil), nil)
 			w := httptest.NewRecorder()
 			router.ServeHTTP(w, httptest.NewRequest("POST", "/api/v1/auth/register", strings.NewReader(tt.body)))
 			if w.Code != tt.status || repo.calls != tt.calls {

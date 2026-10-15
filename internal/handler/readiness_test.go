@@ -29,7 +29,7 @@ func TestReadinessAndLiveness(t *testing.T) {
 			}
 			return nil
 		})
-		router := NewRouter(slog.New(slog.NewTextHandler(io.Discard, nil)), NewReadiness(pinger, time.Second), nil)
+		router := NewRouter(slog.New(slog.NewTextHandler(io.Discard, nil)), NewReadiness(pinger, time.Second), nil, nil)
 		ready := httptest.NewRecorder()
 		router.ServeHTTP(ready, httptest.NewRequest(http.MethodGet, "/ready", nil))
 		want := 200

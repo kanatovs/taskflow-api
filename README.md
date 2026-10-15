@@ -29,6 +29,8 @@ Development follows small, reviewable roadmap tasks. The repository-level
 - Structured JSON logging, HTTP panic recovery, and graceful shutdown.
 - Docker Compose environment for the API and PostgreSQL with persistent storage.
 - PostgreSQL connection pooling and public `GET /ready` readiness checks.
+- Protected project CRUD with owner/admin/member permissions and member-only listing.
+- Project membership management using existing user IDs, with protected owner roles.
 - User registration with bcrypt, login with JWT, and authenticated current-user
   lookup at `GET /api/v1/users/me`.
 - Public `GET /health` endpoint returning `200 OK` and JSON:
@@ -403,8 +405,8 @@ uses golang-migrate and read-only SQL files from `./migrations`, and exits with 
 nonzero status on failure. It is selected directly by `compose run`; no explicit
 profile flag or host migrate installation is needed. Repeating `up` reports
 `no change`. golang-migrate records the version and dirty flag in
-`public.schema_migrations`; `version` should report `1` without `(dirty)` after
-the authentication migration succeeds. Inspect the database state directly:
+`public.schema_migrations`; `version` should report `2` without `(dirty)` after
+the user and project migrations succeed. Inspect the database state directly:
 
 ```powershell
 docker compose exec -T postgres sh -c 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -c "SELECT version, dirty FROM public.schema_migrations;" -c "\dt public.*" -c "\d public.users"'
@@ -424,7 +426,8 @@ To roll back exactly one migration deliberately:
 docker compose run --rm migrate down 1
 ```
 
-**Warning: rolling back migration 1 drops `users` and deletes all user data.**
+**Warning: rolling back migration 2 drops projects and memberships. Rolling back
+migration 1 drops `users` and deletes all user data.**
 Use rollback only when that data loss is intended, preferably in a disposable
 database. Restore the schema with `docker compose run --rm migrate up`; deleted
 data is not restored. A failed migration leaves a dirty state: inspect the error
@@ -435,6 +438,91 @@ Migration 1 creates `users`
 with a generated bigint ID, TIMESTAMPTZ timestamps, a unique normalized email,
 and checks for nonempty password hashes and display names. Repositories use
 parameterized SQL with per-operation deadlines. User JSON omits password hashes.
+
+Migration 2 creates `projects` and `project_members`. Foreign keys reference
+users, deleting a project cascades to its memberships, each project/user pair
+is unique, and roles are constrained to `owner`, `admin`, or `member`. A partial
+unique index permits only one owner membership per project. Project creation
+inserts the project and its owner membership in one transaction. User deletion
+is restricted while projects or memberships reference that user.
+
+## Project API
+
+All project endpoints require a Bearer access token. The creator is the owner.
+
+| Method | Path | Permission | Success |
+| --- | --- | --- | --- |
+| POST | `/api/v1/projects` | Authenticated user | 201 |
+| GET | `/api/v1/projects` | Only the caller's projects | 200 |
+| GET | `/api/v1/projects/{projectID}` | Any project member | 200 |
+| PATCH | `/api/v1/projects/{projectID}` | Owner or admin | 200 |
+| DELETE | `/api/v1/projects/{projectID}` | Owner | 204, empty body |
+
+Create accepts `{"name":"Portfolio","description":"Optional description"}`.
+Names are trimmed and contain 1 to 100 characters without control characters.
+Descriptions default to an empty string and contain at most 2000 characters;
+line breaks and tabs are allowed. JSON bodies are limited to 4096 bytes and
+unknown fields are rejected. PATCH accepts `name`, `description`, or both;
+omitted/null fields are preserved, and an empty patch returns 400. Set
+`description` to `""` to clear it. Ownership cannot be changed.
+
+Listing accepts only `page` (default 1) and `page_size` (default 20, maximum
+100), orders by project ID, and returns `data` plus `meta` with `page`,
+`page_size`, and `total`. Empty pages return `data: []`. No search or advanced
+filters are supported. Missing authentication returns 401, non-members or
+insufficient roles 403, missing resources 404, and invalid input 400.
+
+## Project membership API
+
+| Method | Path | Success |
+| --- | --- | --- |
+| GET | `/api/v1/projects/{projectID}/members` | 200 |
+| POST | `/api/v1/projects/{projectID}/members` | 201 |
+| PATCH | `/api/v1/projects/{projectID}/members/{userID}` | 200 |
+| DELETE | `/api/v1/projects/{projectID}/members/{userID}` | 204, empty body |
+
+All endpoints require authentication and project membership. Any member can
+list members; the same `page`/`page_size` limits apply, ordered by user ID.
+POST requires `{"user_id":42,"role":"member"}`; PATCH requires
+`{"role":"admin"}`. Target users must already exist. No email invitations
+are sent. Responses contain only `project_id`, `user_id`, `role`, and
+`joined_at`. Membership listing queries never select passwords, and responses
+never contain user credentials.
+
+| Actor | Add | Change role | Remove |
+| --- | --- | --- | --- |
+| Owner | Admin or member | Admin/member to admin/member | Admin or member |
+| Admin | Member only | Member to member only (no-op) | Member only |
+| Member | Forbidden | Forbidden | Forbidden |
+
+Owner membership cannot be demoted or removed, including by the owner.
+Ownership transfer is not supported. Duplicate membership returns 409;
+missing users/memberships/projects return 404, invalid roles return 400, and
+insufficient permissions return 403. Each membership operation is scoped to
+the project in the URL. Mutations lock the project row, then recheck actor and
+target roles inside the transaction, so concurrent permission changes cannot
+bypass the service's checks. This serializes writes within a project; writes
+to separate projects can proceed independently.
+
+Run the project and membership Docker smoke checks from PowerShell:
+
+```powershell
+./scripts/projects-smoke.ps1
+```
+
+The script uses a fresh `taskflow-project-smoke-*` project, a separate volume,
+public example credentials, and ports 18082/15436 (overridable with `-ApiPort`
+and `-PostgresPort`). It verifies migration up/repeated-up/down/up, schema
+constraints, registration/login, project CRUD, membership permissions, owner
+protection, cross-project rejection, secret-free responses/logs, and graceful
+shutdown. It removes only its own test project/volume and restores environment
+overrides. The development database and `.env` are preserved.
+
+For Go integration checks, set `TEST_POSTGRES_URL` to a disposable local
+PostgreSQL instance and run `go test ./...`. Each test uses its own database.
+Tests also exercise transaction rollback, duplicate membership races,
+independent concurrent PATCH fields, role changes while a write waits on a
+project lock, request cancellation/deadlines, and connection cleanup.
 
 To run PostgreSQL tests, start a separate Compose project and set the test URL:
 

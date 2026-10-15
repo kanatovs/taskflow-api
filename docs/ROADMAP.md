@@ -80,10 +80,10 @@ Acceptance:
 
 Branch: `feature/project-management`
 
-- [ ] TF-013 — Add project and membership migrations, models, and repositories.
+- [x] TF-013 — Add project and membership migrations, models, and repositories.
   Commit: `feat(projects): add project membership schema`
 
-- [ ] TF-014 — Implement project CRUD.
+- [x] TF-014 — Implement project CRUD.
   Endpoints:
   - `POST /api/v1/projects`
   - `GET /api/v1/projects`
@@ -92,7 +92,7 @@ Branch: `feature/project-management`
   - `DELETE /api/v1/projects/{projectID}`
   Commit: `feat(projects): implement project CRUD`
 
-- [ ] TF-015 — Implement membership and role management.
+- [x] TF-015 — Implement membership and role management.
   Endpoints:
   - `GET /api/v1/projects/{projectID}/members`
   - `POST /api/v1/projects/{projectID}/members`
@@ -100,7 +100,7 @@ Branch: `feature/project-management`
   - `DELETE /api/v1/projects/{projectID}/members/{userID}`
   Commit: `feat(projects): add membership and role management`
 
-- [ ] TF-016 — Complete project authorization and permission tests.
+- [x] TF-016 — Complete project authorization and permission tests.
   Commit: `test(projects): cover project permissions`
 
 Acceptance:
