@@ -1,14 +1,18 @@
 # TaskFlow API
 
-[![CI](https://github.com/kanatovs/taskflow-api/actions/workflows/ci.yml/badge.svg)](https://github.com/kanatovs/taskflow-api/actions/workflows/ci.yml)
+[![CI](https://github.com/kanatovs/taskflow-api/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/kanatovs/taskflow-api/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/kanatovs/taskflow-api?label=release)](https://github.com/kanatovs/taskflow-api/releases/tag/v1.0.0)
 
 TaskFlow is a Go REST backend for collaborative project and task management.
 It demonstrates explicit business rules, parameterized SQL, transactions,
 JWT authentication, and optional Redis caching without an ORM or microservices.
 The repository contains the backend only.
 
-Version **1.0.0** is prepared for release. TF-001 through TF-030 are complete in
-[the roadmap](docs/ROADMAP.md). Tagging and publishing follow PR merge into `main`.
+**TaskFlow API v1.0.0 has been released** and is available in
+[GitHub Releases](https://github.com/kanatovs/taskflow-api/releases/tag/v1.0.0).
+TF-001 through TF-030 are complete in [the roadmap](docs/ROADMAP.md).
+CI on `main` is passing; see the badge above and the
+[successful release CI run](https://github.com/kanatovs/taskflow-api/actions/runs/38736189076).
 
 - [OpenAPI contract](docs/openapi.yaml)
 - [Architecture and diagrams](docs/architecture.md)
