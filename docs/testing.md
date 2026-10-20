@@ -83,6 +83,14 @@ checks against disposable PostgreSQL/Redis services. These checks establish
 cooperative cancellation; they cannot establish a strict response-time bound
 for bcrypt, blocked body reads, or handlers that ignore their contexts.
 
+## Redis parent deadline check
+
+`TestRedisContextDeadline` uses a TCP server that accepts a connection but never
+answers the Redis handshake. Its operation timeout exceeds the test's one-second
+response bound, so the shorter parent deadline must bound the wait. The test
+requires a context or network timeout and waits for `ctx.Done()` before checking
+`ctx.Err()`: the socket deadline can fire before the context timer runs.
+
 ## Isolated integration run
 
 Requires Go, Docker with Linux containers, and Windows PowerShell 5.1 or newer:

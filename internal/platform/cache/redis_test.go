@@ -57,19 +57,30 @@ func TestRedisContextDeadline(t *testing.T) {
 			}
 		}
 	}()
-	r := New(config.Redis{Addr: listener.Addr().String(), DialTimeout: 100 * time.Millisecond, OperationTimeout: 50 * time.Millisecond})
+	// Keep the operation timeout above the assertion bound so ignoring the
+	// shorter parent deadline cannot make the test pass.
+	r := New(config.Redis{Addr: listener.Addr().String(), DialTimeout: 100 * time.Millisecond, OperationTimeout: 2 * time.Second})
 	t.Cleanup(func() { r.Close(); listener.Close(); <-done })
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
 	start := time.Now()
-	if _, _, err := r.Get(ctx, "test"); err == nil {
-		t.Fatal("unresponsive server succeeded")
+	_, _, err = r.Get(ctx, "test")
+	var timeoutErr net.Error
+	if !errors.Is(err, context.DeadlineExceeded) && (!errors.As(err, &timeoutErr) || !timeoutErr.Timeout()) {
+		t.Fatalf("expected a context or network timeout, got %v", err)
 	}
 	if time.Since(start) > time.Second {
 		t.Fatal("context deadline did not bound Redis wait")
 	}
+	// The socket deadline and context timer expire independently. A network
+	// timeout can return before the context timer has closed Done.
+	select {
+	case <-ctx.Done():
+	case <-time.After(time.Second):
+		t.Fatal("parent context did not expire")
+	}
 	if !errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		t.Fatal("parent deadline not reached")
+		t.Fatalf("expected parent deadline expiration, got %v", ctx.Err())
 	}
 }
 
