@@ -60,7 +60,9 @@ paths:
       operationId: register
       summary: Register a user
       description: Public registration with bcrypt password hashing. Email uniqueness uses its normalized
-        form.
+        form. Shares 10 POST attempts per direct client IP in a one-minute fixed window with login;
+        the window starts on the first allowed attempt. Successful requests and invalid input consume
+        the same budget. Forwarded address headers are ignored.
       tags:
       - Authentication
       responses:
@@ -70,6 +72,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '409':
           $ref: '#/components/responses/EmailExists'
+        '429':
+          $ref: '#/components/responses/AuthenticationRateLimited'
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
         '500':
@@ -93,7 +97,10 @@ paths:
       operationId: login
       summary: Obtain an access token
       description: Public login. Unknown emails and wrong passwords return the same safe 401. HS256 JWT
-        contains only sub, iat and exp. No refresh tokens.
+        contains only sub, iat and exp. No refresh tokens. Shares 10 POST attempts per direct client
+        IP in a one-minute fixed window with registration; the window starts on the first allowed
+        attempt. Successful requests and invalid input consume the same budget. Forwarded address
+        headers are ignored.
       tags:
       - Authentication
       responses:
@@ -103,6 +110,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/InvalidCredentials'
+        '429':
+          $ref: '#/components/responses/AuthenticationRateLimited'
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
         '500':
@@ -1166,6 +1175,7 @@ components:
               type: string
               enum:
               - validation_error
+              - rate_limited
               - unauthenticated
               - forbidden
               - not_found
@@ -1991,6 +2001,40 @@ components:
             error:
               code: conflict
               message: Email already registered
+              details: {}
+    AuthenticationRateLimited:
+      description: Too many authentication attempts. Login and registration share one budget per
+        direct connection IP; ports are ignored and IPv4-mapped IPv6 is normalized. The limiter keeps
+        at most 4096 IP entries per API process. At capacity, unknown IPs are rejected until an entry
+        expires without evicting existing budgets. State resets on restart; NAT and reverse-proxy
+        clients share the direct connection IP's budget. Bursts across a window boundary can exceed
+        10 attempts in a rolling minute. Rejected requests do not extend the window.
+      headers:
+        X-Request-ID:
+          description: Server-generated request ID.
+          schema:
+            type: string
+        Retry-After:
+          description: Seconds until the window resets or the earliest tracked entry expires when
+            capacity is full, rounded up to at least one second.
+          schema:
+            type: integer
+            minimum: 1
+          example: 60
+        Cache-Control:
+          description: Authentication rate-limit responses must not be stored.
+          schema:
+            type: string
+            enum:
+            - no-store
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: rate_limited
+              message: Too many authentication attempts
               details: {}
     MethodNotAllowed:
       description: Method not allowed.

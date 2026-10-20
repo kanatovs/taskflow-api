@@ -205,6 +205,15 @@ Final acceptance:
 - No secrets exist in Git history.
 - Main is stable and runnable.
 
+## Post-release hardening
+
+Branch: `fix/auth-rate-limiting`
+
+- [x] TF-031 — Limit authentication attempts per client IP with bounded memory.
+  Scope: shared login/registration budget, safe HTTP 429 responses, concurrency
+  and HTTP tests, and API documentation. No new runtime dependencies.
+  Commit: `feat(auth): limit authentication attempts per client IP`
+
 ## Future repositories
 
 Do not implement them from this repository.

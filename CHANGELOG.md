@@ -4,7 +4,11 @@ Notable changes are listed in a Keep a Changelog-style format.
 
 ## [Unreleased]
 
-No additional business features are part of the v1 release epic.
+### Security
+
+- Limit login and registration to a shared budget of 10 attempts per direct
+  client IP in a one-minute fixed window. Excess attempts receive JSON 429 with
+  `Retry-After`; the in-memory client table is bounded to 4096 entries.
 
 ## [1.0.0] - 2026-10-15
 

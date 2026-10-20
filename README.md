@@ -22,7 +22,8 @@ CI on `main` is passing; see the badge above and the
 
 ## Capabilities and stack
 
-- Registration, bcrypt password hashing, login, and HS256 JWT access tokens.
+- Registration, bcrypt password hashing, login, HS256 JWT access tokens, and an
+  authentication rate limit shared by login and registration.
 - Projects with owner/admin/member roles and project-scoped authorization.
 - Tasks with assignment, status transitions, due dates, and comments.
 - Task filtering, literal substring search, stable sorting and pagination.
@@ -160,6 +161,23 @@ Display names are trimmed, 1-100 characters without controls. Login accepts a
 Unknown emails and wrong passwords return the same 401. Tokens contain only
 `sub` (decimal user ID), `iat`, and `exp`; signatures, HS256 method and timestamps
 are verified. Login and current-user responses use `Cache-Control: no-store`.
+
+Login and registration share a budget of **10 POST attempts per client IP in a
+one-minute fixed window**, starting with that IP's first allowed attempt.
+Successful requests and invalid bodies use the same budget. Excess attempts
+return JSON `429` with code `rate_limited`, message `Too many authentication
+attempts`, `Cache-Control: no-store`, and `Retry-After` in whole seconds rounded
+up (at least 1). Rejected requests do not extend the window.
+
+The limiter uses the direct connection's `RemoteAddr` IP, ignoring ports and
+normalizing IPv4-mapped IPv6. `Forwarded`, `X-Forwarded-For` and `X-Real-IP` are
+not trusted. It keeps at most 4096 IP entries in memory; when full, new IPs receive
+429 until an entry expires, while existing IP budgets are preserved. State is
+local to each API process and resets on restart. Users behind one NAT or reverse
+proxy share a budget. Bursts across a window boundary can exceed 10 attempts in a
+rolling minute. This is basic authentication abuse protection, not a global
+denial-of-service defense. There are no additional environment settings or
+dependencies.
 
 Authentication establishes identity; services separately verify that the user
 still exists and has the necessary current project membership. Passwords/hashes
@@ -324,6 +342,7 @@ deadline; exceeding it forces closure and a nonzero exit.
 | `/health` works, `/ready` is 503 | PostgreSQL health, URL/hostname/credentials and deadline |
 | `/ready` is 200, resource requests fail | Apply migrations; readiness checks connectivity only |
 | 401 / 403 | Valid unexpired Bearer JWT / current membership and role |
+| 429 on login or registration | Wait for `Retry-After`; both endpoints and clients sharing one direct IP use the same budget |
 | Redis unavailable | Detail reads/writes continue via PostgreSQL; inspect safe warnings |
 | Integration tests skip | Use the isolated integration runner; a unit-only pass is insufficient |
 | Integration timeout on a loaded machine | Avoid simultaneous builds; runner serializes packages with `-p 1` |
@@ -335,7 +354,7 @@ Keep `.env` ignored. Use strong non-example secrets, least-privilege database
 credentials, TLS and a trusted deployment boundary before exposing the API.
 Compose is a loopback development environment; its initialized database user is
 a superuser and its internal disposable Redis has no authentication. Request
-limits and timeouts exist; rate limiting, email verification, password reset,
+limits and timeouts exist; email verification, password reset,
 refresh tokens and token revocation are outside v1 scope. There is no owner
 transfer, invitation system or user-list endpoint.
 

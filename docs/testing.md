@@ -13,6 +13,37 @@ go build ./...
 Without `TEST_POSTGRES_URL` / `TEST_REDIS_ADDR`, tests requiring those services
 explicitly skip. A green unit-only run does not prove integration coverage.
 
+## Authentication rate limit checks
+
+When changing the authentication limiter, run the handler tests, then the
+isolated integration runner below because login and registration behavior is
+part of the HTTP contract:
+
+```powershell
+go test -count=1 ./internal/handler
+```
+
+Verify these cases without real-time sleeps by controlling the limiter clock
+in unit tests:
+
+- Login and registration share 10 attempts per direct client IP in a one-minute
+  fixed window. Successful requests and invalid input both consume the budget.
+- The next attempt returns JSON 429 with `rate_limited`, the documented message,
+  `Cache-Control: no-store`, and a positive `Retry-After` rounded up to seconds.
+  A rejected request does not reach authentication work or extend the window.
+- The budget resets at the exact expiry boundary; distinct client IPs have
+  independent budgets. Ports and IPv4-mapped IPv6 cannot create extra budgets.
+- Changing `Forwarded`, `X-Forwarded-For` or `X-Real-IP` does not change identity.
+  Unrelated routes and unsupported methods keep their existing behavior.
+- Concurrent requests cannot admit more than 10 attempts in one window.
+- The tracked-IP count never exceeds 4096. At capacity, unknown IPs receive 429,
+  existing budgets survive, and expired entries are reclaimed lazily.
+
+The fixed-window policy can admit more than 10 attempts in a rolling minute near
+a boundary; do not test it as a rolling-minute limit. Run real HTTP integration
+tests with fresh router instances so limiter state is not shared across unrelated
+tests.
+
 ## Isolated integration run
 
 Requires Go, Docker with Linux containers, and Windows PowerShell 5.1 or newer:
