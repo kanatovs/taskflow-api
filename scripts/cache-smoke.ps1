@@ -13,7 +13,7 @@ $exampleSettings = @{
     POSTGRES_DB = 'taskflow'; POSTGRES_USER = 'taskflow'; POSTGRES_PASSWORD = 'local_example_only'
     DATABASE_URL = 'postgres://taskflow:local_example_only@postgres:5432/taskflow?sslmode=disable'
     DATABASE_TIMEOUT = '3s'; JWT_SECRET = 'local_example_only_change_me_32_bytes_minimum'; JWT_ACCESS_TTL = '15m'
-    HTTP_READ_HEADER_TIMEOUT = '5s'; HTTP_READ_TIMEOUT = '10s'; HTTP_WRITE_TIMEOUT = '10s'
+    HTTP_READ_HEADER_TIMEOUT = '5s'; HTTP_READ_TIMEOUT = '10s'; HTTP_REQUEST_TIMEOUT = '5s'; HTTP_WRITE_TIMEOUT = '10s'
     HTTP_IDLE_TIMEOUT = '60s'; HTTP_SHUTDOWN_TIMEOUT = '10s'; API_STOP_GRACE_PERIOD = '30s'
     REDIS_ADDR = 'redis:6379'; REDIS_PASSWORD = ''; REDIS_DB = '0'; CACHE_TTL = '1m'
     REDIS_DIAL_TIMEOUT = '200ms'; REDIS_OPERATION_TIMEOUT = '100ms'

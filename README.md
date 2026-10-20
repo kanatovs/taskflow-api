@@ -22,7 +22,8 @@ CI on `main` is passing; see the badge above and the
 
 ## Capabilities and stack
 
-- Registration, bcrypt password hashing, login, and HS256 JWT access tokens.
+- Registration, bcrypt password hashing, login, HS256 JWT access tokens, and an
+  authentication rate limit shared by login and registration.
 - Projects with owner/admin/member roles and project-scoped authorization.
 - Tasks with assignment, status transitions, due dates, and comments.
 - Task filtering, literal substring search, stable sorting and pagination.
@@ -129,6 +130,7 @@ empty invalid settings are rejected rather than silently defaulted.
 | `HTTP_ADDR` | `:8080` on host; fixed `:8080` in Compose | Listen host:port; port 1-65535 |
 | `HTTP_READ_HEADER_TIMEOUT` | `5s` | Read request headers |
 | `HTTP_READ_TIMEOUT` | `10s` | Read entire request |
+| `HTTP_REQUEST_TIMEOUT` | `5s`, less than `HTTP_WRITE_TIMEOUT` | Shared context deadline for HTTP processing |
 | `HTTP_WRITE_TIMEOUT` | `10s` | Write response |
 | `HTTP_IDLE_TIMEOUT` | `60s` | Keep-alive idle limit |
 | `HTTP_SHUTDOWN_TIMEOUT` | `10s` | Drain active requests |
@@ -152,6 +154,34 @@ PostgreSQL initialization variables only affect a new, empty volume. Changing
 credentials. Recreate containers after changing settings; `restart` does not
 reload environment variables. The API runs as non-root UID/GID 10001.
 
+## HTTP processing deadline
+
+Each request receives one context deadline when it enters the global middleware
+after its headers have been read. `HTTP_REQUEST_TIMEOUT` defaults to `5s`, must
+be positive, and must be strictly less than `HTTP_WRITE_TIMEOUT`. The same
+deadline flows through the handler, service, PostgreSQL and Redis calls. An
+earlier parent deadline remains in effect; database and Redis operation limits
+may shorten the remaining budget but cannot reset or extend it.
+
+If this request context expires before the response starts, the next response
+write or handler return produces JSON 503 with code `request_timeout`, message
+`Request processing timed out`, empty `details`, `Cache-Control: no-store`, and
+the request ID. Headers prepared for an abandoned response are cleared. If a
+response has already started, the server aborts it rather than appending a JSON
+error to a partial body. Client cancellation is distinct from a server deadline.
+A database operation's shorter deadline still uses the existing internal-error
+response if the HTTP context remains active; readiness failures remain 503
+`not_ready` unless the shared request context has expired.
+
+This is cooperative cancellation: code must observe the context to stop work.
+The middleware does not launch a background handler or buffer responses, and it
+cannot forcibly interrupt bcrypt, a blocked body read, or code that ignores the
+context. Its timeout response is produced at the next write or handler return,
+not at a strict wall-clock instant. Header/read/write/idle socket timeouts remain
+separate protections. In particular, the write timeout limits network I/O; it
+does not itself cancel downstream application work. A timed-out mutation may
+already have committed, so inspect resource state before retrying it.
+
 ## Authentication and authorization
 
 Registration normalizes email and hashes a 12-72 **byte** password with bcrypt.
@@ -160,6 +190,23 @@ Display names are trimmed, 1-100 characters without controls. Login accepts a
 Unknown emails and wrong passwords return the same 401. Tokens contain only
 `sub` (decimal user ID), `iat`, and `exp`; signatures, HS256 method and timestamps
 are verified. Login and current-user responses use `Cache-Control: no-store`.
+
+Login and registration share a budget of **10 POST attempts per client IP in a
+one-minute fixed window**, starting with that IP's first allowed attempt.
+Successful requests and invalid bodies use the same budget. Excess attempts
+return JSON `429` with code `rate_limited`, message `Too many authentication
+attempts`, `Cache-Control: no-store`, and `Retry-After` in whole seconds rounded
+up (at least 1). Rejected requests do not extend the window.
+
+The limiter uses the direct connection's `RemoteAddr` IP, ignoring ports and
+normalizing IPv4-mapped IPv6. `Forwarded`, `X-Forwarded-For` and `X-Real-IP` are
+not trusted. It keeps at most 4096 IP entries in memory; when full, new IPs receive
+429 until an entry expires, while existing IP budgets are preserved. State is
+local to each API process and resets on restart. Users behind one NAT or reverse
+proxy share a budget. Bursts across a window boundary can exceed 10 attempts in a
+rolling minute. This is basic authentication abuse protection, not a global
+denial-of-service defense. There are no additional environment settings or
+dependencies.
 
 Authentication establishes identity; services separately verify that the user
 still exists and has the necessary current project membership. Passwords/hashes
@@ -324,6 +371,8 @@ deadline; exceeding it forces closure and a nonzero exit.
 | `/health` works, `/ready` is 503 | PostgreSQL health, URL/hostname/credentials and deadline |
 | `/ready` is 200, resource requests fail | Apply migrations; readiness checks connectivity only |
 | 401 / 403 | Valid unexpired Bearer JWT / current membership and role |
+| 429 on login or registration | Wait for `Retry-After`; both endpoints and clients sharing one direct IP use the same budget |
+| 503 with `request_timeout` | The shared HTTP processing deadline expired; check dependency latency and timeout settings; inspect state before retrying a mutation |
 | Redis unavailable | Detail reads/writes continue via PostgreSQL; inspect safe warnings |
 | Integration tests skip | Use the isolated integration runner; a unit-only pass is insufficient |
 | Integration timeout on a loaded machine | Avoid simultaneous builds; runner serializes packages with `-p 1` |
@@ -335,7 +384,7 @@ Keep `.env` ignored. Use strong non-example secrets, least-privilege database
 credentials, TLS and a trusted deployment boundary before exposing the API.
 Compose is a loopback development environment; its initialized database user is
 a superuser and its internal disposable Redis has no authentication. Request
-limits and timeouts exist; rate limiting, email verification, password reset,
+limits and timeouts exist; email verification, password reset,
 refresh tokens and token revocation are outside v1 scope. There is no owner
 transfer, invitation system or user-list endpoint.
 

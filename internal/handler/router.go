@@ -4,13 +4,14 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 )
 
-func NewRouter(logger *slog.Logger, readiness *Readiness, auth *AuthHandler, projects *ProjectHandler, tasks *TaskHandler) http.Handler {
+func NewRouter(timeout time.Duration, logger *slog.Logger, readiness *Readiness, auth *AuthHandler, projects *ProjectHandler, tasks *TaskHandler) http.Handler {
 	router := chi.NewRouter()
-	router.Use(requestMiddleware(logger))
+	router.Use(requestMiddleware(logger), requestTimeout(timeout))
 	router.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusNotFound, "not_found", "Route not found", nil)
 	})
@@ -23,8 +24,9 @@ func NewRouter(logger *slog.Logger, readiness *Readiness, auth *AuthHandler, pro
 	router.Get("/health", Health)
 	router.Get("/ready", readiness.ServeHTTP)
 	if auth != nil {
-		router.Post("/api/v1/auth/register", auth.Register)
-		router.Post("/api/v1/auth/login", auth.Login)
+		authLimiter := newAuthRateLimiter()
+		router.With(authLimiter.middleware).Post("/api/v1/auth/register", auth.Register)
+		router.With(authLimiter.middleware).Post("/api/v1/auth/login", auth.Login)
 		router.With(auth.Authenticate).Get("/api/v1/users/me", auth.Me)
 		if tasks != nil {
 			router.Route("/api/v1/projects/{projectID}/tasks", func(r chi.Router) {

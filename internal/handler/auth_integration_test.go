@@ -27,7 +27,7 @@ func TestRegistrationPostgresIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	router := handler.NewRouter(slog.New(slog.NewTextHandler(io.Discard, nil)), handler.NewReadiness(pool, time.Second), handler.NewAuthHandler(service.NewAuthService(repo, issuer), issuer), nil, nil)
+	router := handler.NewRouter(5*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)), handler.NewReadiness(pool, time.Second), handler.NewAuthHandler(service.NewAuthService(repo, issuer), issuer), nil, nil)
 	body := `{"email":" User@Example.com ","password":"strong-password-123","display_name":"Test User"}`
 	for _, want := range []int{201, 409} {
 		w := httptest.NewRecorder()

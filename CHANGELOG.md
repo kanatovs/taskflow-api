@@ -4,7 +4,19 @@ Notable changes are listed in a Keep a Changelog-style format.
 
 ## [Unreleased]
 
-No additional business features are part of the v1 release epic.
+### Added
+
+- A shared HTTP processing context deadline, configured by
+  `HTTP_REQUEST_TIMEOUT` (default `5s`, below `HTTP_WRITE_TIMEOUT`). PostgreSQL
+  and Redis work share the remaining request budget. Before a response starts,
+  expiration produces JSON 503 `request_timeout` at the next write or handler
+  return; an expired response that already started is aborted.
+
+### Security
+
+- Limit login and registration to a shared budget of 10 attempts per direct
+  client IP in a one-minute fixed window. Excess attempts receive JSON 429 with
+  `Retry-After`; the in-memory client table is bounded to 4096 entries.
 
 ## [1.0.0] - 2026-10-15
 

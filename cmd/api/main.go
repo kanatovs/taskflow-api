@@ -70,7 +70,7 @@ func run() int {
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           handler.NewRouter(logger, handler.NewReadiness(pool, cfg.DatabaseTimeout), auth, projectHandler, taskHandler),
+		Handler:           handler.NewRouter(cfg.HTTPRequestTimeout, logger, handler.NewReadiness(pool, cfg.DatabaseTimeout), auth, projectHandler, taskHandler),
 		ReadHeaderTimeout: cfg.HTTPReadHeaderTimeout,
 		ReadTimeout:       cfg.HTTPReadTimeout,
 		WriteTimeout:      cfg.HTTPWriteTimeout,

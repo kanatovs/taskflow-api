@@ -205,6 +205,23 @@ Final acceptance:
 - No secrets exist in Git history.
 - Main is stable and runnable.
 
+## Post-release hardening
+
+Branch: `fix/auth-rate-limiting`
+
+- [x] TF-031 — Limit authentication attempts per client IP with bounded memory.
+  Scope: shared login/registration budget, safe HTTP 429 responses, concurrency
+  and HTTP tests, and API documentation. No new runtime dependencies.
+  Commit: `feat(auth): limit authentication attempts per client IP`
+
+Branch: `fix/http-request-timeout`
+
+- [x] TF-032 — Add a shared HTTP request processing deadline.
+  Scope: validated request-timeout configuration, context propagation through
+  existing services and repositories, safe timeout responses, cancellation and
+  integration tests, and API documentation. No new runtime dependencies.
+  Commit: `feat(http): add shared request processing deadline`
+
 ## Future repositories
 
 Do not implement them from this repository.

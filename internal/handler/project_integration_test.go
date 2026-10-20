@@ -63,7 +63,7 @@ func newProjectHTTP(t *testing.T, stores ...repositorycache.Store) *projectHTTP 
 	}
 	projectService := service.NewProjectService(projects, members, users, projectDetails)
 	comments := handler.NewCommentHandler(service.NewCommentService(projectService, tasks, postgres.NewCommentRepository(pool, time.Second)))
-	router := handler.NewRouter(slog.New(slog.NewJSONHandler(f.logs, nil)), handler.NewReadiness(pool, time.Second), handler.NewAuthHandler(service.NewAuthService(users, issuer), issuer), handler.NewProjectHandler(projectService, service.NewProjectMemberService(projectService, members)), handler.NewTaskHandler(service.NewTaskService(projectService, tasks, taskDetails), comments))
+	router := handler.NewRouter(5*time.Second, slog.New(slog.NewJSONHandler(f.logs, nil)), handler.NewReadiness(pool, time.Second), handler.NewAuthHandler(service.NewAuthService(users, issuer), issuer), handler.NewProjectHandler(projectService, service.NewProjectMemberService(projectService, members)), handler.NewTaskHandler(service.NewTaskService(projectService, tasks, taskDetails), comments))
 	f.server = httptest.NewServer(router)
 	f.server.Client().Timeout = 5 * time.Second
 	t.Cleanup(f.server.Close)

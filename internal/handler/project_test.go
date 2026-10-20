@@ -100,10 +100,11 @@ func TestProjectHandlerErrorMappingAndContext(t *testing.T) {
 			var logs bytes.Buffer
 			p := &projectHandlerFake{err: failure.err}
 			m := &projectMemberHandlerFake{projectHandlerFake: projectHandlerFake{err: failure.err}}
-			router := NewRouter(slog.New(slog.NewJSONHandler(&logs, nil)), nil, NewAuthHandler(nil, issuer), NewProjectHandler(p, m), nil)
+			router := NewRouter(5*time.Second, slog.New(slog.NewJSONHandler(&logs, nil)), nil, NewAuthHandler(nil, issuer), NewProjectHandler(p, m), nil)
 			req := httptest.NewRequest(route.method, route.path, strings.NewReader(route.body)).WithContext(ctx)
 			req.Header.Set("Authorization", "Bearer "+access.AccessToken)
 			w := httptest.NewRecorder()
+			started := time.Now()
 			router.ServeHTTP(w, req)
 			if w.Code != failure.status || !strings.Contains(w.Body.String(), `"code":"`+failure.code+`"`) {
 				t.Fatalf("%s %s: %d %s", route.method, route.path, w.Code, w.Body.String())
@@ -115,10 +116,10 @@ func TestProjectHandlerErrorMappingAndContext(t *testing.T) {
 			if called.ctx == nil || called.ctx.Value(contextKey{}) != "request-value" || called.actor != 7 {
 				t.Fatal("handler lost context or actor")
 			}
-			wantDeadline, _ := ctx.Deadline()
+			parentDeadline, _ := ctx.Deadline()
 			deadline, ok := called.ctx.Deadline()
-			if !ok || deadline != wantDeadline {
-				t.Fatal("handler lost deadline")
+			if !ok || deadline.After(parentDeadline) || deadline.Before(started.Add(5*time.Second)) || deadline.After(time.Now().Add(5*time.Second)) {
+				t.Fatalf("handler deadline=%v, want the shorter HTTP budget within parent deadline=%v", deadline, parentDeadline)
 			}
 			if strings.Contains(route.path, "/9") && called.project != 9 {
 				t.Fatal("handler lost project ID")

@@ -19,6 +19,7 @@ func TestLoad(t *testing.T) {
 		HTTPAddr:              ":8080",
 		HTTPReadHeaderTimeout: 5 * time.Second,
 		HTTPReadTimeout:       10 * time.Second,
+		HTTPRequestTimeout:    5 * time.Second,
 		HTTPWriteTimeout:      10 * time.Second,
 		HTTPIdleTimeout:       60 * time.Second,
 		HTTPShutdownTimeout:   10 * time.Second,
@@ -26,6 +27,7 @@ func TestLoad(t *testing.T) {
 	partial := defaults
 	partial.HTTPAddr = "localhost:8081"
 	partial.HTTPWriteTimeout = 1500 * time.Millisecond
+	partial.HTTPRequestTimeout = time.Second
 
 	tests := []struct {
 		name string
@@ -42,6 +44,7 @@ func TestLoad(t *testing.T) {
 				"HTTP_ADDR":                "127.0.0.1:9090",
 				"HTTP_READ_HEADER_TIMEOUT": "2s",
 				"HTTP_READ_TIMEOUT":        "15s",
+				"HTTP_REQUEST_TIMEOUT":     "8s",
 				"HTTP_WRITE_TIMEOUT":       "20s",
 				"HTTP_IDLE_TIMEOUT":        "1m30s",
 				"HTTP_SHUTDOWN_TIMEOUT":    "25s",
@@ -55,6 +58,7 @@ func TestLoad(t *testing.T) {
 				HTTPAddr:              "127.0.0.1:9090",
 				HTTPReadHeaderTimeout: 2 * time.Second,
 				HTTPReadTimeout:       15 * time.Second,
+				HTTPRequestTimeout:    8 * time.Second,
 				HTTPWriteTimeout:      20 * time.Second,
 				HTTPIdleTimeout:       90 * time.Second,
 				HTTPShutdownTimeout:   25 * time.Second,
@@ -63,8 +67,9 @@ func TestLoad(t *testing.T) {
 		{
 			name: "partial overrides preserve other defaults",
 			env: map[string]string{
-				"HTTP_ADDR":          "localhost:8081",
-				"HTTP_WRITE_TIMEOUT": "1500ms",
+				"HTTP_ADDR":            "localhost:8081",
+				"HTTP_REQUEST_TIMEOUT": "1s",
+				"HTTP_WRITE_TIMEOUT":   "1500ms",
 			},
 			want: partial,
 		},
@@ -161,6 +166,7 @@ func TestLoadInvalidTimeout(t *testing.T) {
 	for _, name := range []string{
 		"HTTP_READ_HEADER_TIMEOUT",
 		"HTTP_READ_TIMEOUT",
+		"HTTP_REQUEST_TIMEOUT",
 		"HTTP_WRITE_TIMEOUT",
 		"HTTP_IDLE_TIMEOUT",
 		"HTTP_SHUTDOWN_TIMEOUT",
@@ -172,6 +178,28 @@ func TestLoadInvalidTimeout(t *testing.T) {
 					t.Setenv(name, tt.value)
 					assertLoadError(t, name)
 				})
+			}
+		})
+	}
+}
+
+func TestLoadRequestTimeoutMustBeLessThanWriteTimeout(t *testing.T) {
+	for _, requestTimeout := range []string{"10s", "11s"} {
+		t.Run(requestTimeout, func(t *testing.T) {
+			unsetConfigEnv(t)
+			t.Setenv("HTTP_REQUEST_TIMEOUT", requestTimeout)
+
+			got, err := config.Load()
+			if err == nil {
+				t.Fatal("Load() succeeded with request timeout at least as long as write timeout")
+			}
+			for _, name := range []string{"HTTP_REQUEST_TIMEOUT", "HTTP_WRITE_TIMEOUT"} {
+				if !strings.Contains(err.Error(), name) {
+					t.Errorf("error = %q, want variable name %q", err, name)
+				}
+			}
+			if got != (config.Config{}) {
+				t.Errorf("config = %+v, want zero config on error", got)
 			}
 		})
 	}
@@ -202,6 +230,7 @@ func unsetConfigEnv(t *testing.T) {
 		"REDIS_ADDR", "REDIS_PASSWORD", "REDIS_DB", "CACHE_TTL", "REDIS_DIAL_TIMEOUT", "REDIS_OPERATION_TIMEOUT",
 		"HTTP_READ_HEADER_TIMEOUT",
 		"HTTP_READ_TIMEOUT",
+		"HTTP_REQUEST_TIMEOUT",
 		"HTTP_WRITE_TIMEOUT",
 		"HTTP_IDLE_TIMEOUT",
 		"HTTP_SHUTDOWN_TIMEOUT",

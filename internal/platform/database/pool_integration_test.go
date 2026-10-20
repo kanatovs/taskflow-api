@@ -27,7 +27,7 @@ func TestPostgresReadinessIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer pool.Close()
-	router := handler.NewRouter(slog.New(slog.NewTextHandler(io.Discard, nil)), handler.NewReadiness(pool, time.Second), nil, nil, nil)
+	router := handler.NewRouter(5*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)), handler.NewReadiness(pool, time.Second), nil, nil, nil)
 	check := func(path string, want int) {
 		t.Helper()
 		w := httptest.NewRecorder()
