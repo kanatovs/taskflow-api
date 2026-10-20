@@ -44,6 +44,45 @@ a boundary; do not test it as a rolling-minute limit. Run real HTTP integration
 tests with fresh router instances so limiter state is not shared across unrelated
 tests.
 
+## HTTP processing deadline checks
+
+When changing the shared HTTP deadline, run handler and configuration tests,
+then the isolated integration runner below:
+
+```powershell
+go test -count=1 ./internal/config ./internal/handler
+```
+
+The deadline coverage should verify:
+
+- `HTTP_REQUEST_TIMEOUT` defaults to `5s`; malformed, empty, zero and negative
+  values are rejected, as are values greater than or equal to
+  `HTTP_WRITE_TIMEOUT`.
+- Successful responses retain their existing status, body and headers. The
+  handler receives a deadline, a shorter parent deadline is preserved, and the
+  middleware cancels its child context when the handler finishes.
+- Waiting for the request context to expire before writing or returning yields
+  exactly one JSON 503 `request_timeout`, the documented message, empty details,
+  `Cache-Control: no-store`, and the same `X-Request-ID`. Headers intended for the
+  abandoned response are removed, and subsequent writes return
+  `http.ErrHandlerTimeout` without appending output.
+- All routes share the same deadline mechanism. Client cancellation is not
+  reclassified as a server deadline, and a dependency's shorter local deadline
+  preserves the existing error mapping while the request context remains live.
+- If expiry is observed after a response starts, handling aborts with
+  `http.ErrAbortHandler`; no JSON is appended to a partial response.
+- A real HTTP current-user request whose PostgreSQL read is blocked by an
+  exclusive table lock returns 503 `request_timeout` when the shared HTTP budget
+  expires first. With a shorter database operation timeout and a live HTTP
+  context, the same blocked read returns 500 `internal_error`. After releasing
+  the lock, a new current-user request succeeds.
+
+Use context completion or explicit synchronization for deadline tests rather
+than relying on a handler sleep just shorter than its deadline. Run integration
+checks against disposable PostgreSQL/Redis services. These checks establish
+cooperative cancellation; they cannot establish a strict response-time bound
+for bcrypt, blocked body reads, or handlers that ignore their contexts.
+
 ## Isolated integration run
 
 Requires Go, Docker with Linux containers, and Windows PowerShell 5.1 or newer:
@@ -84,6 +123,7 @@ selected. Failed native commands throw, including failed cleanup.
 | Migrations | `scripts/integration.ps1` | Clean 0/4/0/4, repeated up, dirty rejection, five tables |
 | Constraints / rollback | `internal/repository/postgres/*_test.go` | Foreign keys, uniqueness, validation constraints, atomic project/owner creation, cancellation |
 | Authentication | `internal/handler/auth*_integration_test.go` | Register, duplicate email, login, safe credential errors, current user, invalid/expired JWT |
+| HTTP processing deadline | `internal/config/config_test.go`, `internal/handler/*timeout*_test.go` | Configuration limits, shared/parent deadlines, context cleanup, client cancellation, safe 503, partial-response abort, real PostgreSQL cancellation |
 | Projects / membership | `internal/handler/project*_integration_test.go` | CRUD, owner membership, role matrix, cross-project access, concurrent member changes |
 | Tasks | `internal/handler/task*_integration_test.go` | CRUD, assignment, status transitions, nullable PATCH, permissions, mixed IDs, filters/search/sort/pages |
 | Comments | `internal/handler/comment_integration_test.go` | CRUD, author/owner/admin rules, mixed task/comment IDs, cascades |

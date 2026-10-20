@@ -4,6 +4,14 @@ Notable changes are listed in a Keep a Changelog-style format.
 
 ## [Unreleased]
 
+### Added
+
+- A shared HTTP processing context deadline, configured by
+  `HTTP_REQUEST_TIMEOUT` (default `5s`, below `HTTP_WRITE_TIMEOUT`). PostgreSQL
+  and Redis work share the remaining request budget. Before a response starts,
+  expiration produces JSON 503 `request_timeout` at the next write or handler
+  return; an expired response that already started is aborted.
+
 ### Security
 
 - Limit login and registration to a shared budget of 10 attempts per direct

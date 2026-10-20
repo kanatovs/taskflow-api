@@ -19,6 +19,7 @@ services:
       # Preserve explicitly empty values so application validation rejects them.
       HTTP_READ_HEADER_TIMEOUT: "${HTTP_READ_HEADER_TIMEOUT-5s}"
       HTTP_READ_TIMEOUT: "${HTTP_READ_TIMEOUT-10s}"
+      HTTP_REQUEST_TIMEOUT: "${HTTP_REQUEST_TIMEOUT-5s}"
       HTTP_WRITE_TIMEOUT: "${HTTP_WRITE_TIMEOUT-10s}"
       HTTP_IDLE_TIMEOUT: "${HTTP_IDLE_TIMEOUT-60s}"
       HTTP_SHUTDOWN_TIMEOUT: "${HTTP_SHUTDOWN_TIMEOUT-10s}"

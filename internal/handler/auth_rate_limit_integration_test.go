@@ -21,7 +21,7 @@ import (
 func TestAuthRateLimitPostgresIntegration(t *testing.T) {
 	pool := testutil.Postgres(t)
 	users := postgres.NewUserRepository(pool, time.Second)
-	router := handler.NewRouter(slog.New(slog.NewTextHandler(io.Discard, nil)), nil,
+	router := handler.NewRouter(5*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)), nil,
 		handler.NewAuthHandler(service.NewAuthService(users, nil), nil), nil, nil)
 	post := func(path, body, peer string, want int) {
 		t.Helper()

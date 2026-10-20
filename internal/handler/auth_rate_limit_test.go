@@ -146,7 +146,7 @@ func (*rateLimitAuthService) Me(context.Context, int64) (domain.User, error) {
 
 func TestAuthRateLimitRoutes(t *testing.T) {
 	svc := &rateLimitAuthService{}
-	router := NewRouter(slog.New(slog.NewTextHandler(io.Discard, nil)), nil, NewAuthHandler(svc, nil), nil, nil)
+	router := NewRouter(5*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, NewAuthHandler(svc, nil), nil, nil)
 	for i := range authAttemptsPerWindow + 2 {
 		path, wantStatus := "/api/v1/auth/login", http.StatusUnauthorized
 		if i%2 == 0 {
@@ -197,7 +197,7 @@ func TestAuthRateLimitRoutes(t *testing.T) {
 
 func TestAuthRateLimitOverHTTP(t *testing.T) {
 	svc := &rateLimitAuthService{}
-	router := NewRouter(slog.New(slog.NewTextHandler(io.Discard, nil)), nil, NewAuthHandler(svc, nil), nil, nil)
+	router := NewRouter(5*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, NewAuthHandler(svc, nil), nil, nil)
 	server := httptest.NewServer(router)
 	t.Cleanup(server.Close)
 	client := server.Client()

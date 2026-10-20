@@ -130,6 +130,7 @@ empty invalid settings are rejected rather than silently defaulted.
 | `HTTP_ADDR` | `:8080` on host; fixed `:8080` in Compose | Listen host:port; port 1-65535 |
 | `HTTP_READ_HEADER_TIMEOUT` | `5s` | Read request headers |
 | `HTTP_READ_TIMEOUT` | `10s` | Read entire request |
+| `HTTP_REQUEST_TIMEOUT` | `5s`, less than `HTTP_WRITE_TIMEOUT` | Shared context deadline for HTTP processing |
 | `HTTP_WRITE_TIMEOUT` | `10s` | Write response |
 | `HTTP_IDLE_TIMEOUT` | `60s` | Keep-alive idle limit |
 | `HTTP_SHUTDOWN_TIMEOUT` | `10s` | Drain active requests |
@@ -152,6 +153,34 @@ PostgreSQL initialization variables only affect a new, empty volume. Changing
 `.env` does not change existing database credentials. Do not delete data to fix
 credentials. Recreate containers after changing settings; `restart` does not
 reload environment variables. The API runs as non-root UID/GID 10001.
+
+## HTTP processing deadline
+
+Each request receives one context deadline when it enters the global middleware
+after its headers have been read. `HTTP_REQUEST_TIMEOUT` defaults to `5s`, must
+be positive, and must be strictly less than `HTTP_WRITE_TIMEOUT`. The same
+deadline flows through the handler, service, PostgreSQL and Redis calls. An
+earlier parent deadline remains in effect; database and Redis operation limits
+may shorten the remaining budget but cannot reset or extend it.
+
+If this request context expires before the response starts, the next response
+write or handler return produces JSON 503 with code `request_timeout`, message
+`Request processing timed out`, empty `details`, `Cache-Control: no-store`, and
+the request ID. Headers prepared for an abandoned response are cleared. If a
+response has already started, the server aborts it rather than appending a JSON
+error to a partial body. Client cancellation is distinct from a server deadline.
+A database operation's shorter deadline still uses the existing internal-error
+response if the HTTP context remains active; readiness failures remain 503
+`not_ready` unless the shared request context has expired.
+
+This is cooperative cancellation: code must observe the context to stop work.
+The middleware does not launch a background handler or buffer responses, and it
+cannot forcibly interrupt bcrypt, a blocked body read, or code that ignores the
+context. Its timeout response is produced at the next write or handler return,
+not at a strict wall-clock instant. Header/read/write/idle socket timeouts remain
+separate protections. In particular, the write timeout limits network I/O; it
+does not itself cancel downstream application work. A timed-out mutation may
+already have committed, so inspect resource state before retrying it.
 
 ## Authentication and authorization
 
@@ -343,6 +372,7 @@ deadline; exceeding it forces closure and a nonzero exit.
 | `/ready` is 200, resource requests fail | Apply migrations; readiness checks connectivity only |
 | 401 / 403 | Valid unexpired Bearer JWT / current membership and role |
 | 429 on login or registration | Wait for `Retry-After`; both endpoints and clients sharing one direct IP use the same budget |
+| 503 with `request_timeout` | The shared HTTP processing deadline expired; check dependency latency and timeout settings; inspect state before retrying a mutation |
 | Redis unavailable | Detail reads/writes continue via PostgreSQL; inspect safe warnings |
 | Integration tests skip | Use the isolated integration runner; a unit-only pass is insufficient |
 | Integration timeout on a loaded machine | Avoid simultaneous builds; runner serializes packages with `-p 1` |

@@ -22,6 +22,7 @@ type Config struct {
 	HTTPAddr              string
 	HTTPReadHeaderTimeout time.Duration
 	HTTPReadTimeout       time.Duration
+	HTTPRequestTimeout    time.Duration
 	HTTPWriteTimeout      time.Duration
 	HTTPIdleTimeout       time.Duration
 	HTTPShutdownTimeout   time.Duration
@@ -69,6 +70,13 @@ func Load() (Config, error) {
 	cfg.HTTPWriteTimeout, err = loadDuration("HTTP_WRITE_TIMEOUT", 10*time.Second)
 	if err != nil {
 		return Config{}, err
+	}
+	cfg.HTTPRequestTimeout, err = loadDuration("HTTP_REQUEST_TIMEOUT", 5*time.Second)
+	if err != nil {
+		return Config{}, err
+	}
+	if cfg.HTTPRequestTimeout >= cfg.HTTPWriteTimeout {
+		return Config{}, errors.New("HTTP_REQUEST_TIMEOUT: must be less than HTTP_WRITE_TIMEOUT")
 	}
 	cfg.HTTPIdleTimeout, err = loadDuration("HTTP_IDLE_TIMEOUT", 60*time.Second)
 	if err != nil {
