@@ -1,8 +1,9 @@
 # TaskFlow v1 release-readiness review
 
-Review date: 2026-10-15. Scope: TF-029, existing backend behavior and its release
-tooling. This is a code/configuration review with automated evidence, not a
-penetration test or certification.
+Review date: 2026-10-15. Scope: the v1.0.0 release candidate's backend behavior
+and release tooling. Results below were recorded during that review; they do not
+assess subsequent changes on the current branch. This is a code/configuration
+review with automated evidence, not a penetration test or certification.
 
 ## Confirmed findings and changes
 
@@ -65,8 +66,9 @@ from Go runtime dependencies.
 
 `python scripts/audit_repository.py` scans tracked working files and every
 reachable Git blob in a full clone locally. It checks private-key headers,
-AWS/GitHub/Slack/OpenAI token shapes, signed JWT shapes, historical `.env` paths,
-tracked environment/build/IDE artifacts, and files larger than 1 MiB. Matches
+AWS/GitHub/Slack and service API token shapes, signed JWT shapes, historical
+`.env` paths, tracked environment/build/IDE artifacts, and files larger than
+1 MiB. Matches
 are reported only by rule/path/object ID, without credential values. Ignored
 local environment files are never read.
 
@@ -75,10 +77,8 @@ IDE files or oversized files were found. `.env` and local tooling are ignored.
 `.gitattributes` defines LF source/docs and CRLF PowerShell working files. The
 scanner's supported credential shapes/placeholders have two passing unit tests.
 
-An automatic approval review rejected mounting the full repository/history into
-a third-party Gitleaks container because it could expose sensitive material to
-that tool. Gitleaks did **not** run. The local script is a safer but narrower
-pattern-based alternative. It cannot detect arbitrary passwords, every provider's
+Gitleaks did **not** run. The local script is a limited pattern-based scanner.
+It cannot detect arbitrary passwords, every provider's
 token format, revoked credentials, or secrets outside reachable history; a clean
 scan is not mathematical proof of their absence. Existing example passwords,
 dummy bcrypt hashes and test JWT secrets are public fixtures, not real credentials.
@@ -96,23 +96,20 @@ dummy bcrypt hashes and test JWT secrets are public fixtures, not real credentia
 - All five external base/service images are pinned; API runs as UID/GID 10001.
   Docker build context excludes `.git`, `.env`, local tools and credentials.
 
-An earlier uncached run during TF-027 timed out in three PostgreSQL tests while
-another Go tool was compiling. The integration runner now uses `-p 1` to reduce
-package contention; its repeated run passed. The schema validator also caught
-missing null enum entries during this review; they were corrected and rerun.
-The local scanner test initially had a module-name import mismatch; the script
-was renamed to match the import and both tests passed.
+Operational note: an uncached run timed out in three PostgreSQL tests while
+another Go tool was compiling. The integration runner uses `-p 1` to reduce
+package contention; its repeated run passed. The successful race check used
+native Windows with CGO and GCC 14.2.0; it does not establish a Linux race result.
 
-An optional Linux race build failed while installing GCC with I/O and DNS
-errors; a slow retry was cancelled after an installed MSYS2 compiler was found
-outside the host PATH. The complete native Windows race run then passed. Initial
-sandbox venv creation failed at ensurepip, and a sandbox Go run was interrupted;
-the documented host venv setup and normal host Go checks subsequently passed.
+## Limitations at the time of review
 
-Residual limits: no rate limiter, password-reset/email-verification flow, refresh
-tokens or explicit token revocation; development credentials are privileged and
-public; TLS/deployment hardening is not supplied; Redis details can be stale until
-TTL; project writes serialize; offset pages can shift under writes; no full-text
-index. No container-wide CVE scanner or penetration test was run. Digest pins
-require deliberate future security updates. GitHub-hosted workflow results can
-only be obtained after a separately authorized push/PR.
+The v1.0.0 release candidate had no rate limiter, password-reset/email-verification
+flow, refresh tokens or explicit token revocation. This is a historical finding;
+see the [README](../README.md) and [changelog](../CHANGELOG.md) for current behavior.
+
+Other limits included privileged public development credentials, no supplied
+TLS/deployment hardening, Redis staleness bounded by TTL, serialized project
+writes, shifting offset pages under concurrent writes and no full-text index.
+No container-wide CVE scanner or penetration test was run. Digest pins require
+deliberate future security updates. Local checks did not establish a
+GitHub-hosted CI result.

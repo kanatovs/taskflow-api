@@ -1,18 +1,8 @@
-.git
-.env
-.env.*
-.agents
-.codex
-.aws
-bin
-dist
-tmp
-.tmp
-.idea
-.vscode
-*.exe
-*.test
-*.out
-docs
-README.md
-AGENTS.md
+# Send only the files required to build the API.
+**
+!go.mod
+!go.sum
+!cmd/
+!cmd/**
+!internal/
+!internal/**

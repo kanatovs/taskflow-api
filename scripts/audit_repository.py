@@ -15,7 +15,7 @@ RULES = {
     "aws-access-key": rb"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b",
     "github-token": rb"\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{50,})\b",
     "slack-token": rb"\bxox[baprs]-[A-Za-z0-9-]{24,}\b",
-    "openai-key": rb"\bsk-(?:proj-|svcacct-)?[A-Za-z0-9_-]{32,}\b",
+    "service-api-key": rb"\bsk-(?:proj-|svcacct-)?[A-Za-z0-9_-]{32,}\b",
     "signed-jwt": rb"\beyJ[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\b",
 }
 PATTERNS = {name: re.compile(pattern) for name, pattern in RULES.items()}
@@ -38,6 +38,7 @@ def main():
         print("A .env file exists in reachable Git history [contents not displayed]")
         failed = True
     files = git("ls-files", "-z").decode("utf-8").split("\0")
+    scanned_files = 0
     for name in filter(None, files):
         path = Path(name)
         if path.name == ".env" or (path.name.startswith(".env.") and path.name != ".env.example"):
@@ -48,7 +49,12 @@ def main():
         ):
             print(f"Unexpected tracked artifact: {name}")
             failed = True
-        data = (ROOT / path).read_bytes()
+        try:
+            data = (ROOT / path).read_bytes()
+        except FileNotFoundError:
+            # Deleted working-tree files are still scanned in Git history below.
+            continue
+        scanned_files += 1
         if len(data) > 1024 * 1024:
             print(f"Tracked file exceeds 1 MiB: {name}")
             failed = True
@@ -87,7 +93,7 @@ def main():
             raise RuntimeError("Git object scan failed")
     if failed:
         return 1
-    print(f"Repository audit passed: {len(list(filter(None, files)))} tracked files, "
+    print(f"Repository audit passed: {scanned_files} tracked files, "
           f"{blobs} historical blobs; no configured credential patterns found")
     return 0
 
