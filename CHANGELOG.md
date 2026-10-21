@@ -41,7 +41,7 @@ Notable changes are listed in a Keep a Changelog-style format.
 - GitHub Actions formatting, vet, tests, build, Compose, migration/integration and
   OpenAPI checks; a validated specification covering 23 HTTP operations.
 - Setup/API examples, architecture and ER/cache diagrams, test guide and release
-  readiness/dependency review.
+  notes.
 
 ### Security
 
@@ -67,5 +67,5 @@ Notable changes are listed in a Keep a Changelog-style format.
 - Cache staleness is bounded by TTL after failed invalidation or an in-flight
   stale refill. Project writes serialize; offset pages can shift under writes;
   text search has no full-text index.
-- No license has been selected. See the release-readiness review for audit limits
-  and the unimported OpenPGP module advisory.
+- No license has been selected. No container-wide CVE scan or penetration test
+  was performed; the credential-history scanner checks selected patterns only.

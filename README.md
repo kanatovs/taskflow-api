@@ -15,7 +15,6 @@ Build and test results are available in the CI badge above.
 - [OpenAPI contract](docs/openapi.yaml)
 - [Architecture and diagrams](docs/architecture.md)
 - [Testing guide](docs/testing.md) and [CI workflow](.github/workflows/ci.yml)
-- [Security and reliability review](docs/release-readiness.md)
 - [Changelog](CHANGELOG.md) and [v1.0.0 release notes](docs/releases/v1.0.0.md)
 
 ## Capabilities and stack
