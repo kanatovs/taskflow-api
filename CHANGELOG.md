@@ -20,9 +20,6 @@ Notable changes are listed in a Keep a Changelog-style format.
 
 ## [1.0.0] - 2026-10-15
 
-Prepared release contents. This date records preparation; the Git tag and GitHub
-release are intentionally pending PR merge into `main`.
-
 ### Added
 
 - User registration with normalized unique email and bcrypt password hashing;
@@ -49,7 +46,7 @@ release are intentionally pending PR merge into `main`.
 ### Security
 
 - Redis updated to patched 8.2.10; all external base/service images pinned by
-  digest. No runtime Go library additions in the final release epic.
+  digest.
 - JWT method/expiration validation, input limits, scoped access checks, safe
   internal-error responses and omission of password/token data from normal logs.
 - Local redacted credential-pattern/history and repository-hygiene audit tooling.

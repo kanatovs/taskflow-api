@@ -4,15 +4,13 @@
 [![Release](https://img.shields.io/github/v/release/kanatovs/taskflow-api?label=release)](https://github.com/kanatovs/taskflow-api/releases/tag/v1.0.0)
 
 TaskFlow is a Go REST backend for collaborative project and task management.
-It demonstrates explicit business rules, parameterized SQL, transactions,
+It uses explicit business rules, parameterized SQL, transactions,
 JWT authentication, and optional Redis caching without an ORM or microservices.
 The repository contains the backend only.
 
 **TaskFlow API v1.0.0 has been released** and is available in
 [GitHub Releases](https://github.com/kanatovs/taskflow-api/releases/tag/v1.0.0).
-TF-001 through TF-030 are complete in [the roadmap](docs/ROADMAP.md).
-CI on `main` is passing; see the badge above and the
-[successful release CI run](https://github.com/kanatovs/taskflow-api/actions/runs/38736189076).
+Build and test results are available in the CI badge above.
 
 - [OpenAPI contract](docs/openapi.yaml)
 - [Architecture and diagrams](docs/architecture.md)
@@ -61,7 +59,7 @@ internal/platform/             Database, Redis, JWT and HTTP lifecycle
 internal/testutil/              Disposable PostgreSQL fixtures
 migrations/                    Four versioned up/down migration pairs
 scripts/                       Checks and isolated integration/smoke runners
-docs/                          OpenAPI, architecture, tests and roadmap
+docs/                          OpenAPI, architecture, testing and release guides
 .github/workflows/             CI
 ```
 
@@ -392,7 +390,8 @@ Pagination uses offsets: pages requested separately may shift after concurrent
 writes. Search is a project-scoped scan, not indexed full-text search. Project
 writes serialize on a project row lock. Cached detail values can be stale within
 their documented TTL bounds. There is no frontend, cloud deployment or metrics
-stack. These limitations are deliberate; see [the roadmap](docs/ROADMAP.md).
+stack. See the [architecture guide](docs/architecture.md) for implementation
+details and tradeoffs.
 
 No software license has been selected; this repository currently grants no
 explicit open-source license.
